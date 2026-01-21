@@ -8,6 +8,8 @@
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Librería para leer Excel (.xlsx) -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     
     <!-- Firebase SDK -->
     <script type="module">
@@ -15,7 +17,6 @@
         import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, doc } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
 
-        // Credenciales vinculadas al proyecto Almacén Airtek
         const firebaseConfig = {
             apiKey: "AIzaSyDwaK4Z26RfqDwNvwdMqri08oEjwG9qymc",
             authDomain: "almacen-airtek.firebaseapp.com",
@@ -25,12 +26,10 @@
             appId: "1:934058211778:web:acbbec880576b6cea5fe5b"
         };
 
-        // Inicializar Firebase
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
 
-        // Exportar a window para que React lo use
         window.fb = { db, auth, collection, addDoc, onSnapshot, query, orderBy, doc, signInAnonymously, onAuthStateChanged };
     </script>
 
@@ -73,7 +72,6 @@
             const [dateStart, setDateStart] = useState(firstDay);
             const [dateEnd, setDateEnd] = useState(today);
 
-            // Ajuste de ruta para cumplir con la estructura de "artifacts"
             const appId = "almacen-airtek";
             const BASE_PATH = ["artifacts", appId, "public", "data"];
 
@@ -99,42 +97,71 @@
                 });
             }, []);
 
+            const processData = async (rows, type) => {
+                const { db, collection, addDoc } = window.fb;
+                const collectionName = type === 'consumos' ? 'consumos_zulia' : 'surtidos_zulia';
+                let count = 0;
+                
+                try {
+                    const targetCollection = collection(db, ...BASE_PATH, collectionName);
+                    for (const row of rows) {
+                        // Soporta tanto formato array (CSV) como objeto (Excel con encabezados)
+                        const fecha = row.fecha || row[0];
+                        const nodoId = row.nodoId || row[1];
+                        const valor = row.valor || row[2];
+
+                        if (fecha && nodoId && valor !== undefined) {
+                            await addDoc(targetCollection, {
+                                fecha: String(fecha).trim(),
+                                nodoId: parseInt(nodoId),
+                                valor: Math.max(0, parseFloat(valor)),
+                                createdAt: new Date().toISOString()
+                            });
+                            count++;
+                        }
+                    }
+                    setUploadStatus(`Sincronizado: ${count} registros nuevos.`);
+                } catch (err) {
+                    setUploadStatus("Error al guardar en base de datos.");
+                    console.error(err);
+                }
+            };
+
             const handleFileUpload = async (e, type) => {
                 const file = e.target.files[0];
                 if (!file || !user) return;
 
+                setUploadStatus("Leyendo archivo...");
+                const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
                 const reader = new FileReader();
-                reader.onload = async (event) => {
-                    const text = event.target.result;
-                    const lines = text.split('\n').slice(1);
-                    const { db, collection, addDoc } = window.fb;
-                    const collectionName = type === 'consumos' ? 'consumos_zulia' : 'surtidos_zulia';
 
-                    let count = 0;
-                    setUploadStatus("Procesando carga...");
-                    
+                reader.onload = async (event) => {
                     try {
-                        const targetCollection = collection(db, ...BASE_PATH, collectionName);
-                        for (const line of lines) {
-                            const [fecha, nodoId, valor] = line.split(',');
-                            if (fecha && nodoId && valor) {
-                                await addDoc(targetCollection, {
-                                    fecha: fecha.trim(),
-                                    nodoId: parseInt(nodoId.trim()),
-                                    valor: parseFloat(valor.trim()),
-                                    createdAt: new Date().toISOString()
-                                });
-                                count++;
-                            }
+                        let dataToProcess = [];
+                        if (isExcel) {
+                            const workbook = XLSX.read(event.target.result, { type: 'binary' });
+                            const sheetName = workbook.SheetNames[0];
+                            // Convierte a JSON asumiendo que la primera fila son encabezados: fecha, nodoId, valor
+                            dataToProcess = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+                        } else {
+                            const text = event.target.result;
+                            const lines = text.split('\n').slice(1); // Ignorar cabecera
+                            dataToProcess = lines.map(line => line.split(','));
                         }
-                        setUploadStatus(`Sincronizado: ${count} registros nuevos en artifacts/${appId}.`);
+                        
+                        await processData(dataToProcess, type);
                     } catch (err) {
-                        setUploadStatus("Error al subir. Revisa permisos.");
+                        setUploadStatus("Error procesando el formato del archivo.");
                         console.error(err);
                     }
                     setTimeout(() => setUploadStatus(null), 4000);
                 };
-                reader.readAsText(file);
+
+                if (isExcel) {
+                    reader.readAsBinaryString(file);
+                } else {
+                    reader.readAsText(file);
+                }
             };
 
             const calculatedMetrics = useMemo(() => {
@@ -156,11 +183,11 @@
                         s.nodoId === nodo.id && new Date(s.fecha) >= start && new Date(s.fecha) <= end
                     );
 
-                    const horasNodo = consumosNodo.reduce((acc, curr) => acc + curr.valor, 0);
-                    const litrosSurtidos = surtidosNodo.reduce((acc, curr) => acc + curr.valor, 0);
+                    const horasNodo = Math.max(0, consumosNodo.reduce((acc, curr) => acc + curr.valor, 0));
+                    const litrosSurtidos = Math.max(0, surtidosNodo.reduce((acc, curr) => acc + curr.valor, 0));
 
-                    const hFinal = horasNodo || (4 * diffDays);
-                    const sFinal = litrosSurtidos || (100 * diffDays);
+                    const hFinal = horasNodo || 0;
+                    const sFinal = litrosSurtidos || 0;
 
                     totals.capacidad += nodo.capacidadTanque;
                     totals.reserva += nodo.reserva;
@@ -170,7 +197,8 @@
                 });
 
                 const capTotal = totals.capacidad + totals.reserva;
-                const disponibilidad = capTotal + totals.surtido - totals.consumo;
+                let disponibilidadOperativa = capTotal - totals.consumo + totals.surtido;
+                const disponibilidad = Math.max(0, disponibilidadOperativa);
 
                 return { ...totals, capTotal, disponibilidad, dias: diffDays };
             }, [selectedId, dateStart, dateEnd, dataLogs]);
@@ -190,7 +218,7 @@
 
                         <nav className="flex-1 space-y-2">
                             <button onClick={() => setView('dashboard')} className={`w-full text-left px-5 py-3 rounded-xl font-bold text-sm transition-all ${view === 'dashboard' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>📊 Tablero</button>
-                            <button onClick={() => setView('upload')} className={`w-full text-left px-5 py-3 rounded-xl font-bold text-sm transition-all ${view === 'upload' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>📤 Cargar CSV</button>
+                            <button onClick={() => setView('upload')} className={`w-full text-left px-5 py-3 rounded-xl font-bold text-sm transition-all ${view === 'upload' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>📤 Cargar Datos</button>
                         </nav>
                         
                         <div className="mt-auto p-4 glass-panel rounded-2xl">
@@ -207,7 +235,7 @@
                                 <header className="flex flex-col xl:flex-row xl:items-end justify-between gap-6 mb-12">
                                     <div>
                                         <h2 className="text-4xl font-black text-white mb-2 uppercase tracking-tighter">Portal Zulia</h2>
-                                        <p className="text-slate-400 font-medium italic">Monitor operativo basado en la base de datos centralizada.</p>
+                                        <p className="text-slate-400 font-medium italic">Monitor de disponibilidad: Capacidad - Consumo + Surtido.</p>
                                     </div>
                                     <div className="flex flex-wrap gap-4 p-3 bg-slate-900 rounded-2xl border border-slate-800">
                                         <div className="flex items-center gap-4 px-2">
@@ -230,6 +258,7 @@
                                     <div className="glass-panel p-6 rounded-3xl border-l-4 border-l-emerald-500">
                                         <p className="text-[10px] font-black text-slate-500 uppercase mb-2">Disponible</p>
                                         <p className="text-3xl font-black text-emerald-400">{formatNum(calculatedMetrics.disponibilidad)} L</p>
+                                        <span className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter italic block mt-1">Cap - Cons + Surt</span>
                                     </div>
                                     <div className="glass-panel p-6 rounded-3xl border-l-4 border-l-orange-500">
                                         <p className="text-[10px] font-black text-slate-500 uppercase mb-2">Consumo Periodo</p>
@@ -244,7 +273,7 @@
                         ) : (
                             <div className="max-w-4xl mx-auto py-12">
                                 <h2 className="text-4xl font-black text-white mb-4 uppercase">Gestión de Datos Airtek</h2>
-                                <p className="text-slate-400 mb-12">Sincroniza tus archivos CSV bajo la ruta de seguridad artifacts.</p>
+                                <p className="text-slate-400 mb-12">Sincroniza archivos CSV o Excel (.xlsx) con columnas: <span className="text-blue-400 font-mono">fecha, nodoId, valor</span>.</p>
 
                                 {uploadStatus && (
                                     <div className="mb-8 p-4 bg-blue-500/10 border border-blue-500 text-blue-400 font-bold rounded-2xl">
@@ -255,11 +284,13 @@
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                     <div className="glass-panel p-8 rounded-[2.5rem] border-t-2 border-orange-500">
                                         <h3 className="text-xl font-black text-orange-400 mb-4 uppercase">Cargar Consumos</h3>
-                                        <input type="file" accept=".csv" onChange={(e) => handleFileUpload(e, 'consumos')} className="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-orange-500/10 file:text-orange-500 cursor-pointer" />
+                                        <p className="text-[10px] text-slate-500 mb-4 italic">Formatos: .csv, .xlsx</p>
+                                        <input type="file" accept=".csv, .xlsx, .xls" onChange={(e) => handleFileUpload(e, 'consumos')} className="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-orange-500/10 file:text-orange-500 cursor-pointer" />
                                     </div>
                                     <div className="glass-panel p-8 rounded-[2.5rem] border-t-2 border-purple-500">
                                         <h3 className="text-xl font-black text-purple-400 mb-4 uppercase">Cargar Surtidos</h3>
-                                        <input type="file" accept=".csv" onChange={(e) => handleFileUpload(e, 'surtidos')} className="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-purple-500/10 file:text-purple-500 cursor-pointer" />
+                                        <p className="text-[10px] text-slate-500 mb-4 italic">Formatos: .csv, .xlsx</p>
+                                        <input type="file" accept=".csv, .xlsx, .xls" onChange={(e) => handleFileUpload(e, 'surtidos')} className="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-purple-500/10 file:text-purple-500 cursor-pointer" />
                                     </div>
                                 </div>
                             </div>
