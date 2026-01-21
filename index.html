@@ -12,7 +12,7 @@
     <!-- Firebase SDK -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, doc } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
 
         // Credenciales vinculadas al proyecto Almacén Airtek
@@ -31,7 +31,7 @@
         const auth = getAuth(app);
 
         // Exportar a window para que React lo use
-        window.fb = { db, auth, collection, addDoc, onSnapshot, query, orderBy, signInAnonymously, onAuthStateChanged };
+        window.fb = { db, auth, collection, addDoc, onSnapshot, query, orderBy, doc, signInAnonymously, onAuthStateChanged };
     </script>
 
     <style>
@@ -73,9 +73,9 @@
             const [dateStart, setDateStart] = useState(firstDay);
             const [dateEnd, setDateEnd] = useState(today);
 
-            // Nombres de colecciones específicos para no chocar con Almacén Airtek
-            const COLL_CONSUMOS = "consumos_zulia";
-            const COLL_SURTIDOS = "surtidos_zulia";
+            // Ajuste de ruta para cumplir con la estructura de "artifacts"
+            const appId = "almacen-airtek";
+            const BASE_PATH = ["artifacts", appId, "public", "data"];
 
             useEffect(() => {
                 if (!window.fb) return;
@@ -86,16 +86,15 @@
                 onAuthStateChanged(auth, (u) => {
                     if (u) {
                         setUser(u);
-                        // Escuchar Consumos (Zulia)
-                        onSnapshot(collection(db, COLL_CONSUMOS), (snapshot) => {
+                        onSnapshot(collection(db, ...BASE_PATH, "consumos_zulia"), (snapshot) => {
                             const docs = snapshot.docs.map(d => d.data());
                             setDataLogs(prev => ({ ...prev, consumos: docs }));
-                        });
-                        // Escuchar Surtidos (Zulia)
-                        onSnapshot(collection(db, COLL_SURTIDOS), (snapshot) => {
+                        }, (err) => console.error("Error leyendo consumos:", err));
+
+                        onSnapshot(collection(db, ...BASE_PATH, "surtidos_zulia"), (snapshot) => {
                             const docs = snapshot.docs.map(d => d.data());
                             setDataLogs(prev => ({ ...prev, surtidos: docs }));
-                        });
+                        }, (err) => console.error("Error leyendo surtidos:", err));
                     }
                 });
             }, []);
@@ -109,16 +108,17 @@
                     const text = event.target.result;
                     const lines = text.split('\n').slice(1);
                     const { db, collection, addDoc } = window.fb;
-                    const targetCollection = type === 'consumos' ? COLL_CONSUMOS : COLL_SURTIDOS;
+                    const collectionName = type === 'consumos' ? 'consumos_zulia' : 'surtidos_zulia';
 
                     let count = 0;
                     setUploadStatus("Procesando carga...");
                     
                     try {
+                        const targetCollection = collection(db, ...BASE_PATH, collectionName);
                         for (const line of lines) {
                             const [fecha, nodoId, valor] = line.split(',');
                             if (fecha && nodoId && valor) {
-                                await addDoc(collection(db, targetCollection), {
+                                await addDoc(targetCollection, {
                                     fecha: fecha.trim(),
                                     nodoId: parseInt(nodoId.trim()),
                                     valor: parseFloat(valor.trim()),
@@ -127,9 +127,9 @@
                                 count++;
                             }
                         }
-                        setUploadStatus(`Sincronizado: ${count} registros nuevos en la nube de Airtek.`);
+                        setUploadStatus(`Sincronizado: ${count} registros nuevos en artifacts/${appId}.`);
                     } catch (err) {
-                        setUploadStatus("Error al subir. Revisa las reglas de Firestore.");
+                        setUploadStatus("Error al subir. Revisa permisos.");
                         console.error(err);
                     }
                     setTimeout(() => setUploadStatus(null), 4000);
@@ -159,7 +159,6 @@
                     const horasNodo = consumosNodo.reduce((acc, curr) => acc + curr.valor, 0);
                     const litrosSurtidos = surtidosNodo.reduce((acc, curr) => acc + curr.valor, 0);
 
-                    // Si no hay datos, simulación base
                     const hFinal = horasNodo || (4 * diffDays);
                     const sFinal = litrosSurtidos || (100 * diffDays);
 
@@ -172,16 +171,14 @@
 
                 const capTotal = totals.capacidad + totals.reserva;
                 const disponibilidad = capTotal + totals.surtido - totals.consumo;
-                const porcentaje = capTotal > 0 ? (disponibilidad / capTotal) * 100 : 0;
 
-                return { ...totals, capTotal, disponibilidad, porcentaje, dias: diffDays };
+                return { ...totals, capTotal, disponibilidad, dias: diffDays };
             }, [selectedId, dateStart, dateEnd, dataLogs]);
 
             const formatNum = (num) => (num || 0).toLocaleString();
 
             return (
                 <div className="min-h-screen flex flex-col md:flex-row overflow-hidden">
-                    {/* Sidebar */}
                     <aside className="w-full md:w-80 bg-slate-900/50 border-r border-slate-800 p-8 flex flex-col gap-8 shrink-0">
                         <div className="flex items-center gap-3 px-2">
                             <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center font-black italic">Z</div>
@@ -225,7 +222,7 @@
                                     </div>
                                 </header>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                                     <div className="glass-panel p-6 rounded-3xl border-l-4 border-l-blue-500">
                                         <p className="text-[10px] font-black text-slate-500 uppercase mb-2">Capacidad Red</p>
                                         <p className="text-3xl font-black text-blue-400">{formatNum(calculatedMetrics.capTotal)} L</p>
@@ -243,24 +240,11 @@
                                         <p className="text-3xl font-black text-purple-400">{formatNum(calculatedMetrics.surtido)} L</p>
                                     </div>
                                 </div>
-
-                                <div className="glass-panel p-8 rounded-[2.5rem]">
-                                    <h3 className="text-xl font-black text-white mb-6 uppercase tracking-widest">Nivel de Seguridad Regional</h3>
-                                    <div className="w-full bg-slate-950 h-5 rounded-full border border-slate-800 overflow-hidden mb-4">
-                                        <div className={`h-full transition-all duration-1000 ${calculatedMetrics.porcentaje < 30 ? 'bg-red-500' : 'bg-blue-600'}`} style={{width: `${Math.min(100, calculatedMetrics.porcentaje)}%`}}></div>
-                                    </div>
-                                    <div className="flex justify-between items-center">
-                                        <p className="text-xs font-bold text-slate-400 tracking-widest">STOCK ESTIMADO AL CIERRE</p>
-                                        <p className={`text-xl font-black ${calculatedMetrics.porcentaje < 30 ? 'text-red-400' : 'text-blue-400'}`}>
-                                            {(calculatedMetrics.porcentaje).toFixed(1)}%
-                                        </p>
-                                    </div>
-                                </div>
                             </>
                         ) : (
                             <div className="max-w-4xl mx-auto py-12">
                                 <h2 className="text-4xl font-black text-white mb-4 uppercase">Gestión de Datos Airtek</h2>
-                                <p className="text-slate-400 mb-12">Sincroniza tus archivos CSV con el proyecto centralizado de Firebase.</p>
+                                <p className="text-slate-400 mb-12">Sincroniza tus archivos CSV bajo la ruta de seguridad artifacts.</p>
 
                                 {uploadStatus && (
                                     <div className="mb-8 p-4 bg-blue-500/10 border border-blue-500 text-blue-400 font-bold rounded-2xl">
