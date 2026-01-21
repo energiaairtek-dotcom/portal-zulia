@@ -8,18 +8,37 @@
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
+
+        // Credenciales vinculadas al proyecto Almacén Airtek
+        const firebaseConfig = {
+            apiKey: "AIzaSyDwaK4Z26RfqDwNvwdMqri08oEjwG9qymc",
+            authDomain: "almacen-airtek.firebaseapp.com",
+            projectId: "almacen-airtek",
+            storageBucket: "almacen-airtek.firebasestorage.app",
+            messagingSenderId: "934058211778",
+            appId: "1:934058211778:web:acbbec880576b6cea5fe5b"
+        };
+
+        // Inicializar Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        // Exportar a window para que React lo use
+        window.fb = { db, auth, collection, addDoc, onSnapshot, query, orderBy, signInAnonymously, onAuthStateChanged };
+    </script>
+
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap');
         body { font-family: 'Inter', sans-serif; background-color: #020617; }
         .glass-panel { background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(12px); border: 1px solid rgba(51, 65, 85, 0.5); }
-        .stat-card { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-        .stat-card:hover { transform: translateY(-4px); border-color: #3b82f6; }
-        input[type="date"]::-webkit-calendar-picker-indicator {
-            filter: invert(1);
-            cursor: pointer;
-        }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
     </style>
 </head>
@@ -27,7 +46,7 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useMemo, useRef } = React;
+        const { useState, useMemo, useEffect } = React;
 
         const NODOS_ZULIA = [
             { id: 1, nombre: "Datacenter/sede 18 de Octubre", capacidadTanque: 305, reserva: 230, tasaConsumo: 20 },
@@ -40,52 +59,80 @@
             { id: 10, nombre: "Nodo Lago Caribe", capacidadTanque: 80, reserva: 429, tasaConsumo: 6 },
             { id: 16, nombre: "Nodo Machiques", capacidadTanque: 300, reserva: 1000, tasaConsumo: 10 },
             { id: 23, nombre: "Nodo/sede Santa Cruz de Mara", capacidadTanque: 100, reserva: 200, tasaConsumo: 6 }
-            // ... (simplificado para el ejemplo, se mantienen los 23 lógicamente)
         ];
 
         const App = () => {
-            const [view, setView] = useState('dashboard'); // 'dashboard' o 'upload'
+            const [view, setView] = useState('dashboard');
             const [selectedId, setSelectedId] = useState('all');
-            
+            const [user, setUser] = useState(null);
+            const [dataLogs, setDataLogs] = useState({ consumos: [], surtidos: [] });
+            const [uploadStatus, setUploadStatus] = useState(null);
+
             const today = new Date().toISOString().split('T')[0];
             const firstDay = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
-            
             const [dateStart, setDateStart] = useState(firstDay);
             const [dateEnd, setDateEnd] = useState(today);
 
-            // Estado para los datos cargados por CSV
-            const [dataLogs, setDataLogs] = useState({ 
-                consumos: [], // { fecha, nodoId, horas }
-                surtidos: []  // { fecha, nodoId, litros }
-            });
+            // Nombres de colecciones específicos para no chocar con Almacén Airtek
+            const COLL_CONSUMOS = "consumos_zulia";
+            const COLL_SURTIDOS = "surtidos_zulia";
 
-            const [uploadStatus, setUploadStatus] = useState(null);
+            useEffect(() => {
+                if (!window.fb) return;
+                const { auth, db, signInAnonymously, onAuthStateChanged, onSnapshot, collection } = window.fb;
 
-            const handleFileUpload = (e, type) => {
+                signInAnonymously(auth).catch(err => console.error("Error Auth Anónima:", err));
+                
+                onAuthStateChanged(auth, (u) => {
+                    if (u) {
+                        setUser(u);
+                        // Escuchar Consumos (Zulia)
+                        onSnapshot(collection(db, COLL_CONSUMOS), (snapshot) => {
+                            const docs = snapshot.docs.map(d => d.data());
+                            setDataLogs(prev => ({ ...prev, consumos: docs }));
+                        });
+                        // Escuchar Surtidos (Zulia)
+                        onSnapshot(collection(db, COLL_SURTIDOS), (snapshot) => {
+                            const docs = snapshot.docs.map(d => d.data());
+                            setDataLogs(prev => ({ ...prev, surtidos: docs }));
+                        });
+                    }
+                });
+            }, []);
+
+            const handleFileUpload = async (e, type) => {
                 const file = e.target.files[0];
-                if (!file) return;
+                if (!file || !user) return;
 
                 const reader = new FileReader();
-                reader.onload = (event) => {
+                reader.onload = async (event) => {
                     const text = event.target.result;
-                    const lines = text.split('\n').slice(1); // Omitir cabecera
-                    const newEntries = lines.map(line => {
-                        const [fecha, nodoId, valor] = line.split(',');
-                        if (!fecha || !nodoId || !valor) return null;
-                        return { 
-                            fecha: fecha.trim(), 
-                            nodoId: parseInt(nodoId.trim()), 
-                            valor: parseFloat(valor.trim()) 
-                        };
-                    }).filter(entry => entry !== null);
+                    const lines = text.split('\n').slice(1);
+                    const { db, collection, addDoc } = window.fb;
+                    const targetCollection = type === 'consumos' ? COLL_CONSUMOS : COLL_SURTIDOS;
 
-                    setDataLogs(prev => ({
-                        ...prev,
-                        [type]: [...prev[type], ...newEntries]
-                    }));
+                    let count = 0;
+                    setUploadStatus("Procesando carga...");
                     
-                    setUploadStatus(`Exito: ${newEntries.length} registros cargados en ${type}`);
-                    setTimeout(() => setUploadStatus(null), 3000);
+                    try {
+                        for (const line of lines) {
+                            const [fecha, nodoId, valor] = line.split(',');
+                            if (fecha && nodoId && valor) {
+                                await addDoc(collection(db, targetCollection), {
+                                    fecha: fecha.trim(),
+                                    nodoId: parseInt(nodoId.trim()),
+                                    valor: parseFloat(valor.trim()),
+                                    createdAt: new Date().toISOString()
+                                });
+                                count++;
+                            }
+                        }
+                        setUploadStatus(`Sincronizado: ${count} registros nuevos en la nube de Airtek.`);
+                    } catch (err) {
+                        setUploadStatus("Error al subir. Revisa las reglas de Firestore.");
+                        console.error(err);
+                    }
+                    setTimeout(() => setUploadStatus(null), 4000);
                 };
                 reader.readAsText(file);
             };
@@ -97,40 +144,28 @@
 
                 const start = new Date(dateStart);
                 const end = new Date(dateEnd);
-                const diffTime = Math.abs(end - start);
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
+                const diffDays = Math.ceil(Math.abs(end - start) / (1000 * 60 * 60 * 24)) || 1;
 
-                let totals = {
-                    capacidad: 0,
-                    reserva: 0,
-                    consumo: 0,
-                    surtido: 0,
-                    horas: 0
-                };
+                let totals = { capacidad: 0, reserva: 0, consumo: 0, surtido: 0, horas: 0 };
 
                 nodesToProcess.forEach(nodo => {
-                    // Filtrar datos reales cargados por el usuario en el rango
                     const consumosNodo = dataLogs.consumos.filter(c => 
-                        c.nodoId === nodo.id && 
-                        new Date(c.fecha) >= start && 
-                        new Date(c.fecha) <= end
+                        c.nodoId === nodo.id && new Date(c.fecha) >= start && new Date(c.fecha) <= end
                     );
                     const surtidosNodo = dataLogs.surtidos.filter(s => 
-                        s.nodoId === nodo.id && 
-                        new Date(s.fecha) >= start && 
-                        new Date(s.fecha) <= end
+                        s.nodoId === nodo.id && new Date(s.fecha) >= start && new Date(s.fecha) <= end
                     );
 
                     const horasNodo = consumosNodo.reduce((acc, curr) => acc + curr.valor, 0);
                     const litrosSurtidos = surtidosNodo.reduce((acc, curr) => acc + curr.valor, 0);
 
-                    // Si no hay datos cargados, usamos una simulación base proporcional
-                    const hFinal = horasNodo || (selectedId === 'all' ? 4 * diffDays : 2 * diffDays);
-                    const sFinal = litrosSurtidos || (selectedId === 'all' ? 100 * diffDays : 20 * diffDays);
+                    // Si no hay datos, simulación base
+                    const hFinal = horasNodo || (4 * diffDays);
+                    const sFinal = litrosSurtidos || (100 * diffDays);
 
-                    totals.capacidad += (nodo.capacidadTanque || 0);
-                    totals.reserva += (nodo.reserva || 0);
-                    totals.consumo += (hFinal * (nodo.tasaConsumo || 0));
+                    totals.capacidad += nodo.capacidadTanque;
+                    totals.reserva += nodo.reserva;
+                    totals.consumo += (hFinal * nodo.tasaConsumo);
                     totals.surtido += sFinal;
                     totals.horas += hFinal;
                 });
@@ -149,166 +184,99 @@
                     {/* Sidebar */}
                     <aside className="w-full md:w-80 bg-slate-900/50 border-r border-slate-800 p-8 flex flex-col gap-8 shrink-0">
                         <div className="flex items-center gap-3 px-2">
-                            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center font-black italic shadow-lg shadow-blue-500/20">Z</div>
+                            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center font-black italic">Z</div>
                             <div>
-                                <h1 className="text-xl font-black tracking-tighter text-white">GE-ZULIA</h1>
-                                <p className="text-[10px] text-blue-400 font-bold uppercase tracking-widest">Control Regional</p>
+                                <h1 className="text-xl font-black text-white">GE-ZULIA</h1>
+                                <p className="text-[10px] text-blue-400 font-bold uppercase tracking-widest">Proyecto: Almacén Airtek</p>
                             </div>
                         </div>
 
                         <nav className="flex-1 space-y-2">
-                            <button 
-                                onClick={() => setView('dashboard')}
-                                className={`w-full text-left px-5 py-3 rounded-xl font-bold text-sm transition-all ${view === 'dashboard' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20' : 'text-slate-400 hover:bg-slate-800'}`}
-                            >
-                                📊 Tablero
-                            </button>
-                            <button 
-                                onClick={() => setView('upload')}
-                                className={`w-full text-left px-5 py-3 rounded-xl font-bold text-sm transition-all ${view === 'upload' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20' : 'text-slate-400 hover:bg-slate-800'}`}
-                            >
-                                📤 Cargar CSV
-                            </button>
+                            <button onClick={() => setView('dashboard')} className={`w-full text-left px-5 py-3 rounded-xl font-bold text-sm transition-all ${view === 'dashboard' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>📊 Tablero</button>
+                            <button onClick={() => setView('upload')} className={`w-full text-left px-5 py-3 rounded-xl font-bold text-sm transition-all ${view === 'upload' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>📤 Cargar CSV</button>
                         </nav>
-                                             
+                        
+                        <div className="mt-auto p-4 glass-panel rounded-2xl">
+                            <p className="text-[10px] font-black text-slate-500 uppercase mb-2">Estado Sincronización</p>
+                            <div className="text-[10px] text-slate-300">
+                                DB: <span className="text-emerald-400 font-bold">Conectado</span>
+                            </div>
+                        </div>
                     </aside>
 
-                    {/* Main Content */}
                     <main className="flex-1 p-6 md:p-12 overflow-y-auto bg-slate-950 custom-scrollbar">
                         {view === 'dashboard' ? (
                             <>
                                 <header className="flex flex-col xl:flex-row xl:items-end justify-between gap-6 mb-12">
                                     <div>
-                                        <h2 className="text-4xl font-black tracking-tighter text-white mb-2 uppercase">Monitor de Combustible</h2>
-                                        <p className="text-slate-400 font-medium italic">Filtro activo: {calculatedMetrics.dias} días de estudio.</p>
+                                        <h2 className="text-4xl font-black text-white mb-2 uppercase tracking-tighter">Portal Zulia</h2>
+                                        <p className="text-slate-400 font-medium italic">Monitor operativo basado en la base de datos centralizada.</p>
                                     </div>
-                                    
-                                    <div className="flex flex-wrap gap-4 p-3 bg-slate-900 rounded-2xl border border-slate-800 shadow-2xl">
-                                        <div className="flex items-center gap-4">
-                                            <div className="flex flex-col gap-1 px-2">
-                                                <span className="text-[9px] font-black text-slate-500 uppercase ml-1">Desde</span>
-                                                <input type="date" value={dateStart} onChange={e => setDateStart(e.target.value)} className="bg-transparent text-white text-xs font-bold outline-none border-b border-slate-700 pb-1 focus:border-blue-500 transition-colors" />
-                                            </div>
-                                            <div className="flex flex-col gap-1 px-2">
-                                                <span className="text-[9px] font-black text-slate-500 uppercase ml-1">Hasta</span>
-                                                <input type="date" value={dateEnd} onChange={e => setDateEnd(e.target.value)} className="bg-transparent text-white text-xs font-bold outline-none border-b border-slate-700 pb-1 focus:border-blue-500 transition-colors" />
-                                            </div>
+                                    <div className="flex flex-wrap gap-4 p-3 bg-slate-900 rounded-2xl border border-slate-800">
+                                        <div className="flex items-center gap-4 px-2">
+                                            <input type="date" value={dateStart} onChange={e => setDateStart(e.target.value)} className="bg-transparent text-white text-xs font-bold outline-none border-b border-slate-700" />
+                                            <span className="text-slate-600 text-xs">al</span>
+                                            <input type="date" value={dateEnd} onChange={e => setDateEnd(e.target.value)} className="bg-transparent text-white text-xs font-bold outline-none border-b border-slate-700" />
                                         </div>
-                                        <div className="hidden lg:block w-px bg-slate-800 my-1"></div>
-                                        <div className="flex flex-col gap-1 px-2 min-w-[200px]">
-                                            <span className="text-[9px] font-black text-slate-500 uppercase ml-1 text-blue-400">Punto de Control</span>
-                                            <select value={selectedId} onChange={e => setSelectedId(e.target.value)} className="bg-transparent text-white text-sm font-bold outline-none cursor-pointer pr-4">
-                                                <option value="all" className="bg-slate-900 text-white">🌐 TODOS LOS NODOS</option>
-                                                {NODOS_ZULIA.map(n => <option key={n.id} value={n.id} className="bg-slate-900 text-white">{n.nombre}</option>)}
-                                            </select>
-                                        </div>
+                                        <select value={selectedId} onChange={e => setSelectedId(e.target.value)} className="bg-transparent text-white text-sm font-bold outline-none cursor-pointer">
+                                            <option value="all" className="bg-slate-900">🌐 TODOS LOS NODOS</option>
+                                            {NODOS_ZULIA.map(n => <option key={n.id} value={n.id} className="bg-slate-900">{n.nombre}</option>)}
+                                        </select>
                                     </div>
                                 </header>
 
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-                                    <div className="glass-panel p-6 rounded-[2rem] stat-card border-l-4 border-l-blue-500">
-                                        <p className="text-[10px] font-black text-slate-500 uppercase mb-2 tracking-widest">Capacidad Instalada</p>
+                                    <div className="glass-panel p-6 rounded-3xl border-l-4 border-l-blue-500">
+                                        <p className="text-[10px] font-black text-slate-500 uppercase mb-2">Capacidad Red</p>
                                         <p className="text-3xl font-black text-blue-400">{formatNum(calculatedMetrics.capTotal)} L</p>
                                     </div>
-                                    <div className="glass-panel p-6 rounded-[2rem] stat-card border-l-4 border-l-emerald-500">
-                                        <p className="text-[10px] font-black text-slate-500 uppercase mb-2 tracking-widest">Disponibilidad</p>
+                                    <div className="glass-panel p-6 rounded-3xl border-l-4 border-l-emerald-500">
+                                        <p className="text-[10px] font-black text-slate-500 uppercase mb-2">Disponible</p>
                                         <p className="text-3xl font-black text-emerald-400">{formatNum(calculatedMetrics.disponibilidad)} L</p>
                                     </div>
-                                    <div className="glass-panel p-6 rounded-[2rem] stat-card border-l-4 border-l-orange-500">
-                                        <p className="text-[10px] font-black text-slate-500 uppercase mb-2 tracking-widest">Consumo Rango</p>
+                                    <div className="glass-panel p-6 rounded-3xl border-l-4 border-l-orange-500">
+                                        <p className="text-[10px] font-black text-slate-500 uppercase mb-2">Consumo Periodo</p>
                                         <p className="text-3xl font-black text-orange-400">{formatNum(calculatedMetrics.consumo)} L</p>
                                     </div>
-                                    <div className="glass-panel p-6 rounded-[2rem] stat-card border-l-4 border-l-purple-500">
-                                        <p className="text-[10px] font-black text-slate-500 uppercase mb-2 tracking-widest">Surtido Rango</p>
+                                    <div className="glass-panel p-6 rounded-3xl border-l-4 border-l-purple-500">
+                                        <p className="text-[10px] font-black text-slate-500 uppercase mb-2">Surtido Periodo</p>
                                         <p className="text-3xl font-black text-purple-400">{formatNum(calculatedMetrics.surtido)} L</p>
                                     </div>
                                 </div>
 
-                                <div className="lg:col-span-2 glass-panel p-10 rounded-[3rem]">
-                                    <h3 className="text-xl font-black text-white mb-8">Estado de Reserva Operativa</h3>
-                                    <div className="space-y-4">
-                                        <div className="flex justify-between text-sm font-bold">
-                                            <span className="text-slate-400">Nivel de Seguridad al cierre del periodo</span>
-                                            <span className={(calculatedMetrics.porcentaje || 0) < 30 ? 'text-red-400' : 'text-blue-400'}>
-                                                {(calculatedMetrics.porcentaje || 0).toFixed(1)}%
-                                            </span>
-                                        </div>
-                                        <div className="w-full bg-slate-950 h-8 rounded-2xl p-1 border border-slate-800 shadow-inner overflow-hidden">
-                                            <div 
-                                                className={`h-full rounded-xl transition-all duration-1000 shadow-lg ${(calculatedMetrics.porcentaje || 0) < 30 ? 'bg-red-500' : 'bg-blue-600'}`}
-                                                style={{width: `${Math.min(100, (calculatedMetrics.porcentaje || 0))}%`}}
-                                            ></div>
-                                        </div>
-                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
-                                            <div className="p-4 bg-slate-900/50 rounded-2xl border border-slate-800">
-                                                <p className="text-[9px] font-black text-slate-500 mb-1">HORAS TOTALES</p>
-                                                <p className="text-lg font-black text-white">{formatNum(calculatedMetrics.horas)}h</p>
-                                            </div>
-                                            <div className="p-4 bg-slate-900/50 rounded-2xl border border-slate-800">
-                                                <p className="text-[9px] font-black text-slate-500 mb-1">DÍAS RANGO</p>
-                                                <p className="text-lg font-black text-white">{calculatedMetrics.dias}d</p>
-                                            </div>
-                                            <div className="p-4 bg-slate-900/50 rounded-2xl border border-slate-800">
-                                                <p className="text-[9px] font-black text-slate-500 mb-1">BALANCE NETO</p>
-                                                <p className={`text-lg font-black ${calculatedMetrics.surtido >= calculatedMetrics.consumo ? 'text-emerald-400' : 'text-red-400'}`}>
-                                                    {formatNum(calculatedMetrics.surtido - calculatedMetrics.consumo)}L
-                                                </p>
-                                            </div>
-                                        </div>
+                                <div className="glass-panel p-8 rounded-[2.5rem]">
+                                    <h3 className="text-xl font-black text-white mb-6 uppercase tracking-widest">Nivel de Seguridad Regional</h3>
+                                    <div className="w-full bg-slate-950 h-5 rounded-full border border-slate-800 overflow-hidden mb-4">
+                                        <div className={`h-full transition-all duration-1000 ${calculatedMetrics.porcentaje < 30 ? 'bg-red-500' : 'bg-blue-600'}`} style={{width: `${Math.min(100, calculatedMetrics.porcentaje)}%`}}></div>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <p className="text-xs font-bold text-slate-400 tracking-widest">STOCK ESTIMADO AL CIERRE</p>
+                                        <p className={`text-xl font-black ${calculatedMetrics.porcentaje < 30 ? 'text-red-400' : 'text-blue-400'}`}>
+                                            {(calculatedMetrics.porcentaje).toFixed(1)}%
+                                        </p>
                                     </div>
                                 </div>
                             </>
                         ) : (
                             <div className="max-w-4xl mx-auto py-12">
-                                <h2 className="text-4xl font-black text-white mb-4 uppercase">Carga de Datos CSV</h2>
-                                <p className="text-slate-400 mb-12">Importe archivos para actualizar los niveles de consumo y surtido de la red Zulia.</p>
+                                <h2 className="text-4xl font-black text-white mb-4 uppercase">Gestión de Datos Airtek</h2>
+                                <p className="text-slate-400 mb-12">Sincroniza tus archivos CSV con el proyecto centralizado de Firebase.</p>
 
                                 {uploadStatus && (
-                                    <div className="mb-8 p-4 bg-emerald-500/20 border border-emerald-500/50 text-emerald-400 font-bold rounded-2xl flex items-center gap-3">
-                                        <span className="text-xl">✅</span> {uploadStatus}
+                                    <div className="mb-8 p-4 bg-blue-500/10 border border-blue-500 text-blue-400 font-bold rounded-2xl">
+                                        {uploadStatus}
                                     </div>
                                 )}
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                    <div className="glass-panel p-8 rounded-[2.5rem] border-t-4 border-t-orange-500">
-                                        <div className="text-3xl mb-4">⚙️</div>
-                                        <h3 className="text-xl font-black text-white mb-2">Registro de Consumos</h3>
-                                        <p className="text-sm text-slate-500 mb-6">Archivo CSV con columnas: <code className="bg-slate-900 px-1 rounded text-orange-400">fecha, nodoId, horas</code></p>
-                                        <label className="block">
-                                            <span className="sr-only">Elegir CSV</span>
-                                            <input 
-                                                type="file" 
-                                                accept=".csv"
-                                                onChange={(e) => handleFileUpload(e, 'consumos')}
-                                                className="block w-full text-sm text-slate-500 file:mr-4 file:py-3 file:px-6 file:rounded-xl file:border-0 file:text-xs file:font-black file:uppercase file:bg-orange-500/10 file:text-orange-500 hover:file:bg-orange-500/20 cursor-pointer"
-                                            />
-                                        </label>
+                                    <div className="glass-panel p-8 rounded-[2.5rem] border-t-2 border-orange-500">
+                                        <h3 className="text-xl font-black text-orange-400 mb-4 uppercase">Cargar Consumos</h3>
+                                        <input type="file" accept=".csv" onChange={(e) => handleFileUpload(e, 'consumos')} className="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-orange-500/10 file:text-orange-500 cursor-pointer" />
                                     </div>
-
-                                    <div className="glass-panel p-8 rounded-[2.5rem] border-t-4 border-t-purple-500">
-                                        <div className="text-3xl mb-4">⛽</div>
-                                        <h3 className="text-xl font-black text-white mb-2">Registro de Surtidos</h3>
-                                        <p className="text-sm text-slate-500 mb-6">Archivo CSV con columnas: <code className="bg-slate-900 px-1 rounded text-purple-400">fecha, nodoId, litros</code></p>
-                                        <label className="block">
-                                            <span className="sr-only">Elegir CSV</span>
-                                            <input 
-                                                type="file" 
-                                                accept=".csv"
-                                                onChange={(e) => handleFileUpload(e, 'surtidos')}
-                                                className="block w-full text-sm text-slate-500 file:mr-4 file:py-3 file:px-6 file:rounded-xl file:border-0 file:text-xs file:font-black file:uppercase file:bg-purple-500/10 file:text-purple-500 hover:file:bg-purple-500/20 cursor-pointer"
-                                            />
-                                        </label>
+                                    <div className="glass-panel p-8 rounded-[2.5rem] border-t-2 border-purple-500">
+                                        <h3 className="text-xl font-black text-purple-400 mb-4 uppercase">Cargar Surtidos</h3>
+                                        <input type="file" accept=".csv" onChange={(e) => handleFileUpload(e, 'surtidos')} className="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-purple-500/10 file:text-purple-500 cursor-pointer" />
                                     </div>
-                                </div>
-
-                                <div className="mt-12 p-8 glass-panel rounded-[2rem] bg-blue-600/5 border-blue-500/20">
-                                    <h4 className="text-xs font-black uppercase text-blue-400 mb-4 tracking-widest">Instrucciones de Formato</h4>
-                                    <ul className="text-xs text-slate-400 space-y-2 list-disc ml-4">
-                                        <li>El archivo debe estar codificado en UTF-8.</li>
-                                        <li>La primera fila se ignora (cabecera).</li>
-                                        <li>Las fechas deben tener formato <code className="text-white">AAAA-MM-DD</code>.</li>
-                                        <li>El <code className="text-white">nodoId</code> debe coincidir con el ID interno (Ej: 1 para 18 de Octubre, 16 para Machiques).</li>
-                                    </ul>
                                 </div>
                             </div>
                         )}
