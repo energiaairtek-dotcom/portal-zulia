@@ -3,302 +3,611 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Portal Zulia - Gestión de Combustible</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- Librería para leer Excel (.xlsx) -->
-    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <title>Gestión de Plantas Eléctricas</title>
     
-    <!-- Firebase SDK -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, doc } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
+    <!-- Cargar React y ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    
+    <!-- Cargar Babel para procesar JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Cargar Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyDwaK4Z26RfqDwNvwdMqri08oEjwG9qymc",
-            authDomain: "almacen-airtek.firebaseapp.com",
-            projectId: "almacen-airtek",
-            storageBucket: "almacen-airtek.firebasestorage.app",
-            messagingSenderId: "934058211778",
-            appId: "1:934058211778:web:acbbec880576b6cea5fe5b"
-        };
-
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const auth = getAuth(app);
-
-        window.fb = { db, auth, collection, addDoc, onSnapshot, query, orderBy, doc, signInAnonymously, onAuthStateChanged };
-    </script>
-
+    <!-- Estilos base para la fuente -->
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap');
-        body { font-family: 'Inter', sans-serif; background-color: #020617; }
-        .glass-panel { background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(12px); border: 1px solid rgba(51, 65, 85, 0.5); }
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
     </style>
 </head>
-<body class="text-slate-100">
+<body class="bg-slate-50 text-slate-900">
     <div id="root"></div>
 
     <script type="text/babel">
         const { useState, useMemo, useEffect } = React;
 
-        const NODOS_ZULIA = [
-            { id: 1, nombre: "Datacenter/sede 18 de Octubre", capacidadTanque: 305, reserva: 230, tasaConsumo: 20 },
-            { id: 2, nombre: "Datacenter/nodo El Callao", capacidadTanque: 305, reserva: 800, tasaConsumo: 20 },
-            { id: 3, nombre: "Comedor", capacidadTanque: 330, reserva: 230, tasaConsumo: 18 },
-            { id: 4, nombre: "Nodo Bachaquero", capacidadTanque: 1000, reserva: 0, tasaConsumo: 6 },
-            { id: 5, nombre: "Nodo Los Puertos de Altagracia", capacidadTanque: 1100, reserva: 1000, tasaConsumo: 6 },
-            { id: 6, nombre: "Nodo Cabimas", capacidadTanque: 80, reserva: 1396, tasaConsumo: 6 },
-            { id: 7, nombre: "Nodo Ciudad Ojeda", capacidadTanque: 80, reserva: 1145, tasaConsumo: 6 },
-            { id: 10, nombre: "Nodo Lago Caribe", capacidadTanque: 80, reserva: 429, tasaConsumo: 6 },
-            { id: 16, nombre: "Nodo Machiques", capacidadTanque: 300, reserva: 1000, tasaConsumo: 10 },
-            { id: 23, nombre: "Nodo/sede Santa Cruz de Mara", capacidadTanque: 100, reserva: 200, tasaConsumo: 6 }
+        // --- ICONOS (SVG Inline para evitar dependencias externas complejas) ---
+        const Icon = ({ path, className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                {path}
+            </svg>
+        );
+
+        const Zap = (props) => <Icon {...props} path={<><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></>} />;
+        const Users = (props) => <Icon {...props} path={<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></>} />;
+        const Activity = (props) => <Icon {...props} path={<><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></>} />;
+        const Droplet = (props) => <Icon {...props} path={<><path d="M12 2.69l5.74 5.88a6 6 0 0 1-8.48 8.48A6 6 0 0 1 5.53 9.94L12 2.69z"></path></>} />;
+        const Clock = (props) => <Icon {...props} path={<><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></>} />;
+        const LogOut = (props) => <Icon {...props} path={<><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></>} />;
+        const Menu = (props) => <Icon {...props} path={<><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></>} />;
+        const ChevronDown = (props) => <Icon {...props} path={<><polyline points="6 9 12 15 18 9"></polyline></>} />;
+        const Trash2 = (props) => <Icon {...props} path={<><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></>} />;
+        const PlusCircle = (props) => <Icon {...props} path={<><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></>} />;
+        const Save = (props) => <Icon {...props} path={<><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></>} />;
+        const BarChart3 = (props) => <Icon {...props} path={<><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></>} />;
+
+        // --- DATOS Y CONFIGURACIÓN ---
+
+        const GENERADORES_DATA = [
+            { id: 1, nombre: "Comedor GE#00 (150kVA)" },
+            { id: 2, nombre: "Datacenter/nodo El Callao GE#00 (130kVA)" },
+            { id: 3, nombre: "Datacenter/nodo El Callao GE#01 (100kVA)" },
+            { id: 4, nombre: "Datacenter/sede 18 de Octubre GE#00 (165kVA)" },
+            { id: 5, nombre: "Datacenter/sede 18 de Octubre GE#01 (150kVA)" },
+            { id: 6, nombre: "Headend Machiques GE#00 (45kVA)" },
+            { id: 7, nombre: "Nodo Bachaquero GE#00 (25kVA)" },
+            { id: 8, nombre: "Nodo Ciudad Ojeda GE#00 (30kVA)" },
+            { id: 9, nombre: "Nodo La Concepción GE#00 (25kVA)" },
+            { id: 10, nombre: "Nodo La Villa del Rosario GE#00 (12kVA)" },
+            { id: 11, nombre: "Nodo Lago Caribe GE#00 (30kVA)" },
+            { id: 12, nombre: "Nodo Las Tunas GE#00 (25kVA)" },
+            { id: 13, nombre: "Nodo Marite GE#00 (25kVA)" },
+            { id: 14, nombre: "Nodo Mene Grande GE#00 (30kVA)" },
+            { id: 15, nombre: "Nodo Pomona GE#00 (25kVA)" },
+            { id: 16, nombre: "Nodo Puertos de Altagracia GE#00 (28kVA)" },
+            { id: 17, nombre: "Nodo/sede Bella Vista GE#00 (150kVA)" },
+            { id: 18, nombre: "Nodo/sede Bella Vista GE#00 (35kVA)" },
+            { id: 19, nombre: "Nodo/sede La Cañada de Urdaneta GE#00 (30kVA)" },
+            { id: 20, nombre: "Nodo/sede Santa Cruz de Mara GE#00 (35kVA)" },
+            { id: 21, nombre: "Sede CPS GE#00 (130kVA)" },
+            { id: 22, nombre: "Sede CPS GE#01 (30kVA)" },
+            { id: 23, nombre: "Nodo San Rafael GE#00 (20kVA)" },
+            { id: 24, nombre: "Nodo/sede San Rafael Del Mojan GE#00 (7.5kVA)" },
+            { id: 25, nombre: "Sede S.G. GE#00 (35kVA)" },
+            { id: 26, nombre: "Sede Marfi GE#00 (kVA)" },
         ];
 
-        const App = () => {
-            const [view, setView] = useState('dashboard');
-            const [selectedId, setSelectedId] = useState('all');
-            const [user, setUser] = useState(null);
-            const [dataLogs, setDataLogs] = useState({ consumos: [], surtidos: [] });
-            const [uploadStatus, setUploadStatus] = useState(null);
+        const ROLES = {
+            PROGRAMADOR: 'Programador', 
+            MONITOREO: 'Monitoreo',     
+            TECNICO: 'Técnico',         
+        };
 
-            const today = new Date().toISOString().split('T')[0];
-            const firstDay = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
-            const [dateStart, setDateStart] = useState(firstDay);
-            const [dateEnd, setDateEnd] = useState(today);
+        // --- COMPONENTES UI ---
 
-            const appId = "almacen-airtek";
-            const BASE_PATH = ["artifacts", appId, "public", "data"];
+        const Card = ({ children, className = "" }) => (
+            <div className={`bg-white rounded-xl shadow-md p-6 ${className}`}>
+                {children}
+            </div>
+        );
 
-            useEffect(() => {
-                if (!window.fb) return;
-                const { auth, db, signInAnonymously, onAuthStateChanged, onSnapshot, collection } = window.fb;
+        const Button = ({ onClick, children, variant = 'primary', className = "", disabled = false }) => {
+            const baseStyle = "px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed";
+            const variants = {
+                primary: "bg-blue-600 text-white hover:bg-blue-700",
+                secondary: "bg-gray-100 text-gray-700 hover:bg-gray-200",
+                danger: "bg-red-100 text-red-600 hover:bg-red-200",
+                outline: "border border-gray-300 text-gray-700 hover:bg-gray-50"
+            };
+            return (
+                <button onClick={onClick} className={`${baseStyle} ${variants[variant]} ${className}`} disabled={disabled}>
+                    {children}
+                </button>
+            );
+        };
 
-                signInAnonymously(auth).catch(err => console.error("Error Auth Anónima:", err));
-                
-                onAuthStateChanged(auth, (u) => {
-                    if (u) {
-                        setUser(u);
-                        onSnapshot(collection(db, ...BASE_PATH, "consumos_zulia"), (snapshot) => {
-                            const docs = snapshot.docs.map(d => d.data());
-                            setDataLogs(prev => ({ ...prev, consumos: docs }));
-                        }, (err) => console.error("Error leyendo consumos:", err));
+        // --- APLICACIÓN ---
 
-                        onSnapshot(collection(db, ...BASE_PATH, "surtidos_zulia"), (snapshot) => {
-                            const docs = snapshot.docs.map(d => d.data());
-                            setDataLogs(prev => ({ ...prev, surtidos: docs }));
-                        }, (err) => console.error("Error leyendo surtidos:", err));
-                    }
-                });
-            }, []);
+        function App() {
+            // Estado
+            const [users, setUsers] = useState([
+                { username: 'admin', password: 'admin', role: ROLES.PROGRAMADOR, id: 1 }
+            ]);
+            
+            const [currentUser, setCurrentUser] = useState(null);
+            const [logs, setLogs] = useState([]);
+            const [currentView, setCurrentView] = useState('login');
+            
+            // Formularios
+            const [loginForm, setLoginForm] = useState({ username: '', password: '' });
+            const [userForm, setUserForm] = useState({ username: '', password: '', role: ROLES.TECNICO });
+            const [entryForm, setEntryForm] = useState({ generatorId: '', type: 'gasoil', value: '', date: new Date().toISOString().split('T')[0] });
+            const [filterForm, setFilterForm] = useState({ generatorId: 'all', startDate: '', endDate: '' });
 
-            const processData = async (rows, type) => {
-                const { db, collection, addDoc } = window.fb;
-                const collectionName = type === 'consumos' ? 'consumos_zulia' : 'surtidos_zulia';
-                let count = 0;
-                
-                try {
-                    const targetCollection = collection(db, ...BASE_PATH, collectionName);
-                    for (const row of rows) {
-                        // Soporta tanto formato array (CSV) como objeto (Excel con encabezados)
-                        const fecha = row.fecha || row[0];
-                        const nodoId = row.nodoId || row[1];
-                        const valor = row.valor || row[2];
-
-                        if (fecha && nodoId && valor !== undefined) {
-                            await addDoc(targetCollection, {
-                                fecha: String(fecha).trim(),
-                                nodoId: parseInt(nodoId),
-                                valor: Math.max(0, parseFloat(valor)),
-                                createdAt: new Date().toISOString()
-                            });
-                            count++;
-                        }
-                    }
-                    setUploadStatus(`Sincronizado: ${count} registros nuevos.`);
-                } catch (err) {
-                    setUploadStatus("Error al guardar en base de datos.");
-                    console.error(err);
+            // Handlers
+            const handleLogin = (e) => {
+                e.preventDefault();
+                const user = users.find(u => u.username === loginForm.username && u.password === loginForm.password);
+                if (user) {
+                    setCurrentUser(user);
+                    if (user.role === ROLES.PROGRAMADOR) setCurrentView('visualizacion');
+                    else if (user.role === ROLES.MONITOREO) setCurrentView('visualizacion');
+                    else if (user.role === ROLES.TECNICO) setCurrentView('alimentacion');
+                    setLoginForm({ username: '', password: '' });
+                } else {
+                    alert("Credenciales incorrectas");
                 }
             };
 
-            const handleFileUpload = async (e, type) => {
-                const file = e.target.files[0];
-                if (!file || !user) return;
+            const handleLogout = () => {
+                setCurrentUser(null);
+                setCurrentView('login');
+            };
 
-                setUploadStatus("Leyendo archivo...");
-                const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
-                const reader = new FileReader();
+            const addUser = (e) => {
+                e.preventDefault();
+                if (users.some(u => u.username === userForm.username)) {
+                    alert("El nombre de usuario ya existe.");
+                    return;
+                }
+                const newUser = { ...userForm, id: Date.now() };
+                setUsers([...users, newUser]);
+                setUserForm({ username: '', password: '', role: ROLES.TECNICO });
+                alert("Usuario creado exitosamente.");
+            };
 
-                reader.onload = async (event) => {
-                    try {
-                        let dataToProcess = [];
-                        if (isExcel) {
-                            const workbook = XLSX.read(event.target.result, { type: 'binary' });
-                            const sheetName = workbook.SheetNames[0];
-                            // Convierte a JSON asumiendo que la primera fila son encabezados: fecha, nodoId, valor
-                            dataToProcess = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
-                        } else {
-                            const text = event.target.result;
-                            const lines = text.split('\n').slice(1); // Ignorar cabecera
-                            dataToProcess = lines.map(line => line.split(','));
-                        }
-                        
-                        await processData(dataToProcess, type);
-                    } catch (err) {
-                        setUploadStatus("Error procesando el formato del archivo.");
-                        console.error(err);
-                    }
-                    setTimeout(() => setUploadStatus(null), 4000);
+            const deleteUser = (id) => {
+                if (id === 1) {
+                    alert("No se puede eliminar el usuario admin principal.");
+                    return;
+                }
+                setUsers(users.filter(u => u.id !== id));
+            };
+
+            const addLog = (e) => {
+                e.preventDefault();
+                if (!entryForm.generatorId || !entryForm.value) {
+                    alert("Por favor complete todos los campos.");
+                    return;
+                }
+
+                const newLog = {
+                    id: Date.now(),
+                    generatorId: parseInt(entryForm.generatorId),
+                    type: entryForm.type,
+                    value: parseFloat(entryForm.value),
+                    date: entryForm.date,
+                    userId: currentUser.id,
+                    userName: currentUser.username
                 };
 
-                if (isExcel) {
-                    reader.readAsBinaryString(file);
-                } else {
-                    reader.readAsText(file);
-                }
+                setLogs([...logs, newLog]);
+                setEntryForm({ ...entryForm, value: '' }); 
+                alert("Registro guardado correctamente.");
             };
 
-            const calculatedMetrics = useMemo(() => {
-                const nodesToProcess = selectedId === 'all' 
-                    ? NODOS_ZULIA 
-                    : NODOS_ZULIA.filter(n => n.id === parseInt(selectedId));
+            // Cálculos
+            const filteredLogs = useMemo(() => {
+                return logs.filter(log => {
+                    const matchGen = filterForm.generatorId === 'all' || log.generatorId === parseInt(filterForm.generatorId);
+                    const matchStart = !filterForm.startDate || log.date >= filterForm.startDate;
+                    const matchEnd = !filterForm.endDate || log.date <= filterForm.endDate;
+                    return matchGen && matchStart && matchEnd;
+                }).sort((a, b) => new Date(b.date) - new Date(a.date));
+            }, [logs, filterForm]);
 
-                const start = new Date(dateStart);
-                const end = new Date(dateEnd);
-                const diffDays = Math.ceil(Math.abs(end - start) / (1000 * 60 * 60 * 24)) || 1;
+            const stats = useMemo(() => {
+                return filteredLogs.reduce((acc, log) => {
+                    if (log.type === 'gasoil') acc.gasoil += log.value;
+                    if (log.type === 'horas') acc.hours += log.value;
+                    return acc;
+                }, { gasoil: 0, hours: 0 });
+            }, [filteredLogs]);
 
-                let totals = { capacidad: 0, reserva: 0, consumo: 0, surtido: 0, horas: 0 };
-
-                nodesToProcess.forEach(nodo => {
-                    const consumosNodo = dataLogs.consumos.filter(c => 
-                        c.nodoId === nodo.id && new Date(c.fecha) >= start && new Date(c.fecha) <= end
-                    );
-                    const surtidosNodo = dataLogs.surtidos.filter(s => 
-                        s.nodoId === nodo.id && new Date(s.fecha) >= start && new Date(s.fecha) <= end
-                    );
-
-                    const horasNodo = Math.max(0, consumosNodo.reduce((acc, curr) => acc + curr.valor, 0));
-                    const litrosSurtidos = Math.max(0, surtidosNodo.reduce((acc, curr) => acc + curr.valor, 0));
-
-                    const hFinal = horasNodo || 0;
-                    const sFinal = litrosSurtidos || 0;
-
-                    totals.capacidad += nodo.capacidadTanque;
-                    totals.reserva += nodo.reserva;
-                    totals.consumo += (hFinal * nodo.tasaConsumo);
-                    totals.surtido += sFinal;
-                    totals.horas += hFinal;
-                });
-
-                const capTotal = totals.capacidad + totals.reserva;
-                let disponibilidadOperativa = capTotal - totals.consumo + totals.surtido;
-                const disponibilidad = Math.max(0, disponibilidadOperativa);
-
-                return { ...totals, capTotal, disponibilidad, dias: diffDays };
-            }, [selectedId, dateStart, dateEnd, dataLogs]);
-
-            const formatNum = (num) => (num || 0).toLocaleString();
-
-            return (
-                <div className="min-h-screen flex flex-col md:flex-row overflow-hidden">
-                    <aside className="w-full md:w-80 bg-slate-900/50 border-r border-slate-800 p-8 flex flex-col gap-8 shrink-0">
-                        <div className="flex items-center gap-3 px-2">
-                            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center font-black italic">Z</div>
-                            <div>
-                                <h1 className="text-xl font-black text-white">GE-ZULIA</h1>
-                                <p className="text-[10px] text-blue-400 font-bold uppercase tracking-widest">Proyecto: Almacén Airtek</p>
+            // Renderizado: Login
+            if (!currentUser) {
+                return (
+                    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
+                        <div className="max-w-md w-full">
+                            <div className="text-center mb-8">
+                                <div className="bg-blue-600 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-500/30">
+                                    <Zap className="text-white w-8 h-8" />
+                                </div>
+                                <h1 className="text-2xl font-bold text-slate-800">Control de Generadores</h1>
+                                <p className="text-slate-500">Sistema de Gestión de Energía</p>
                             </div>
-                        </div>
-
-                        <nav className="flex-1 space-y-2">
-                            <button onClick={() => setView('dashboard')} className={`w-full text-left px-5 py-3 rounded-xl font-bold text-sm transition-all ${view === 'dashboard' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>📊 Tablero</button>
-                            <button onClick={() => setView('upload')} className={`w-full text-left px-5 py-3 rounded-xl font-bold text-sm transition-all ${view === 'upload' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>📤 Cargar Datos</button>
-                        </nav>
-                        
-                        <div className="mt-auto p-4 glass-panel rounded-2xl">
-                            <p className="text-[10px] font-black text-slate-500 uppercase mb-2">Estado Sincronización</p>
-                            <div className="text-[10px] text-slate-300">
-                                DB: <span className="text-emerald-400 font-bold">Conectado</span>
-                            </div>
-                        </div>
-                    </aside>
-
-                    <main className="flex-1 p-6 md:p-12 overflow-y-auto bg-slate-950 custom-scrollbar">
-                        {view === 'dashboard' ? (
-                            <>
-                                <header className="flex flex-col xl:flex-row xl:items-end justify-between gap-6 mb-12">
+                            
+                            <Card>
+                                <form onSubmit={handleLogin} className="space-y-4">
                                     <div>
-                                        <h2 className="text-4xl font-black text-white mb-2 uppercase tracking-tighter">Portal Zulia</h2>
-                                        <p className="text-slate-400 font-medium italic">Monitor de disponibilidad: Capacidad - Consumo + Surtido.</p>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">Usuario</label>
+                                        <input 
+                                            type="text" 
+                                            required
+                                            className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                            value={loginForm.username}
+                                            onChange={e => setLoginForm({...loginForm, username: e.target.value})}
+                                        />
                                     </div>
-                                    <div className="flex flex-wrap gap-4 p-3 bg-slate-900 rounded-2xl border border-slate-800">
-                                        <div className="flex items-center gap-4 px-2">
-                                            <input type="date" value={dateStart} onChange={e => setDateStart(e.target.value)} className="bg-transparent text-white text-xs font-bold outline-none border-b border-slate-700" />
-                                            <span className="text-slate-600 text-xs">al</span>
-                                            <input type="date" value={dateEnd} onChange={e => setDateEnd(e.target.value)} className="bg-transparent text-white text-xs font-bold outline-none border-b border-slate-700" />
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">Contraseña</label>
+                                        <input 
+                                            type="password" 
+                                            required
+                                            className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                            value={loginForm.password}
+                                            onChange={e => setLoginForm({...loginForm, password: e.target.value})}
+                                        />
+                                    </div>
+                                    <Button className="w-full justify-center">Ingresar</Button>
+                                </form>
+                            </Card>
+                        </div>
+                    </div>
+                );
+            }
+
+            // Renderizado: App Principal
+            return (
+                <div className="min-h-screen bg-slate-50">
+                    <nav className="bg-slate-900 text-white shadow-lg sticky top-0 z-50">
+                        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                            <div className="flex items-center justify-between h-16">
+                                <div className="flex items-center gap-3">
+                                    <div className="bg-blue-500 p-1.5 rounded-lg">
+                                        <Zap className="w-5 h-5" />
+                                    </div>
+                                    <span className="font-bold text-lg hidden sm:block">PowerMonitor</span>
+                                </div>
+
+                                <div className="flex items-center gap-4">
+                                    <div className="relative group">
+                                        <button className="flex items-center gap-2 bg-slate-800 px-4 py-2 rounded-lg hover:bg-slate-700 transition-colors">
+                                            <Menu className="w-4 h-4" />
+                                            <span>Módulos</span>
+                                            <ChevronDown className="w-4 h-4" />
+                                        </button>
+                                        
+                                        <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-xl py-1 text-slate-800 hidden group-hover:block border border-slate-100">
+                                            {currentUser.role === ROLES.PROGRAMADOR && (
+                                                <button 
+                                                    onClick={() => setCurrentView('usuarios')}
+                                                    className="w-full text-left px-4 py-2 hover:bg-blue-50 flex items-center gap-2"
+                                                >
+                                                    <Users className="w-4 h-4 text-blue-600" /> Usuarios
+                                                </button>
+                                            )}
+                                            
+                                            {(currentUser.role === ROLES.PROGRAMADOR || currentUser.role === ROLES.TECNICO) && (
+                                                <button 
+                                                    onClick={() => setCurrentView('alimentacion')}
+                                                    className="w-full text-left px-4 py-2 hover:bg-blue-50 flex items-center gap-2"
+                                                >
+                                                    <Activity className="w-4 h-4 text-green-600" /> Alimentación
+                                                </button>
+                                            )}
+                                            
+                                            {(currentUser.role === ROLES.PROGRAMADOR || currentUser.role === ROLES.MONITOREO) && (
+                                                <button 
+                                                    onClick={() => setCurrentView('visualizacion')}
+                                                    className="w-full text-left px-4 py-2 hover:bg-blue-50 flex items-center gap-2"
+                                                >
+                                                    <BarChart3 className="w-4 h-4 text-purple-600" /> Visualización
+                                                </button>
+                                            )}
                                         </div>
-                                        <select value={selectedId} onChange={e => setSelectedId(e.target.value)} className="bg-transparent text-white text-sm font-bold outline-none cursor-pointer">
-                                            <option value="all" className="bg-slate-900">🌐 TODOS LOS NODOS</option>
-                                            {NODOS_ZULIA.map(n => <option key={n.id} value={n.id} className="bg-slate-900">{n.nombre}</option>)}
-                                        </select>
                                     </div>
-                                </header>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                                    <div className="glass-panel p-6 rounded-3xl border-l-4 border-l-blue-500">
-                                        <p className="text-[10px] font-black text-slate-500 uppercase mb-2">Capacidad Red</p>
-                                        <p className="text-3xl font-black text-blue-400">{formatNum(calculatedMetrics.capTotal)} L</p>
-                                    </div>
-                                    <div className="glass-panel p-6 rounded-3xl border-l-4 border-l-emerald-500">
-                                        <p className="text-[10px] font-black text-slate-500 uppercase mb-2">Disponible</p>
-                                        <p className="text-3xl font-black text-emerald-400">{formatNum(calculatedMetrics.disponibilidad)} L</p>
-                                        <span className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter italic block mt-1">Cap - Cons + Surt</span>
-                                    </div>
-                                    <div className="glass-panel p-6 rounded-3xl border-l-4 border-l-orange-500">
-                                        <p className="text-[10px] font-black text-slate-500 uppercase mb-2">Consumo Periodo</p>
-                                        <p className="text-3xl font-black text-orange-400">{formatNum(calculatedMetrics.consumo)} L</p>
-                                    </div>
-                                    <div className="glass-panel p-6 rounded-3xl border-l-4 border-l-purple-500">
-                                        <p className="text-[10px] font-black text-slate-500 uppercase mb-2">Surtido Periodo</p>
-                                        <p className="text-3xl font-black text-purple-400">{formatNum(calculatedMetrics.surtido)} L</p>
+                                    <div className="h-6 w-px bg-slate-700 mx-2"></div>
+                                    
+                                    <div className="flex items-center gap-3">
+                                        <div className="text-right hidden sm:block">
+                                            <p className="text-sm font-medium">{currentUser.username}</p>
+                                            <p className="text-xs text-slate-400">{currentUser.role}</p>
+                                        </div>
+                                        <button onClick={handleLogout} className="p-2 hover:bg-slate-800 rounded-full text-red-400 hover:text-red-300 transition-colors">
+                                            <LogOut className="w-5 h-5" />
+                                        </button>
                                     </div>
                                 </div>
-                            </>
-                        ) : (
-                            <div className="max-w-4xl mx-auto py-12">
-                                <h2 className="text-4xl font-black text-white mb-4 uppercase">Gestión de Datos Airtek</h2>
-                                <p className="text-slate-400 mb-12">Sincroniza archivos CSV o Excel (.xlsx) con columnas: <span className="text-blue-400 font-mono">fecha, nodoId, valor</span>.</p>
+                            </div>
+                        </div>
+                    </nav>
+                    
+                    <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                        {/* VISTA: USUARIOS */}
+                        {currentView === 'usuarios' && currentUser.role === ROLES.PROGRAMADOR && (
+                            <div className="space-y-6">
+                                <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                                    <Users className="text-blue-600" /> Gestión de Usuarios
+                                </h2>
+                                
+                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                    <Card className="lg:col-span-1 h-fit">
+                                        <h3 className="font-semibold text-lg mb-4">Nuevo Usuario</h3>
+                                        <form onSubmit={addUser} className="space-y-4">
+                                            <div>
+                                                <label className="text-sm font-medium text-slate-700">Usuario</label>
+                                                <input 
+                                                    type="text" required
+                                                    className="w-full p-2 border rounded mt-1"
+                                                    value={userForm.username}
+                                                    onChange={e => setUserForm({...userForm, username: e.target.value})}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="text-sm font-medium text-slate-700">Contraseña</label>
+                                                <input 
+                                                    type="password" required
+                                                    className="w-full p-2 border rounded mt-1"
+                                                    value={userForm.password}
+                                                    onChange={e => setUserForm({...userForm, password: e.target.value})}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="text-sm font-medium text-slate-700">Nivel de Acceso</label>
+                                                <select 
+                                                    className="w-full p-2 border rounded mt-1 bg-white"
+                                                    value={userForm.role}
+                                                    onChange={e => setUserForm({...userForm, role: e.target.value})}
+                                                >
+                                                    <option value={ROLES.PROGRAMADOR}>Programador (Total)</option>
+                                                    <option value={ROLES.MONITOREO}>Monitoreo (Solo ver)</option>
+                                                    <option value={ROLES.TECNICO}>Técnico (Solo carga)</option>
+                                                </select>
+                                            </div>
+                                            <Button className="w-full justify-center">
+                                                <PlusCircle className="w-4 h-4" /> Agregar Usuario
+                                            </Button>
+                                        </form>
+                                    </Card>
 
-                                {uploadStatus && (
-                                    <div className="mb-8 p-4 bg-blue-500/10 border border-blue-500 text-blue-400 font-bold rounded-2xl">
-                                        {uploadStatus}
-                                    </div>
-                                )}
+                                    <Card className="lg:col-span-2">
+                                        <h3 className="font-semibold text-lg mb-4">Lista de Usuarios</h3>
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-left">
+                                                <thead className="bg-slate-50 border-b">
+                                                    <tr>
+                                                        <th className="p-3 text-sm font-semibold text-slate-600">Usuario</th>
+                                                        <th className="p-3 text-sm font-semibold text-slate-600">Nivel</th>
+                                                        <th className="p-3 text-sm font-semibold text-slate-600 text-right">Acciones</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y">
+                                                    {users.map(u => (
+                                                        <tr key={u.id}>
+                                                            <td className="p-3 text-slate-800 font-medium">{u.username}</td>
+                                                            <td className="p-3">
+                                                                <span className={`px-2 py-1 rounded-full text-xs font-medium 
+                                                                    ${u.role === ROLES.PROGRAMADOR ? 'bg-purple-100 text-purple-700' : 
+                                                                    u.role === ROLES.MONITOREO ? 'bg-blue-100 text-blue-700' : 
+                                                                    'bg-green-100 text-green-700'}`}>
+                                                                    {u.role}
+                                                                </span>
+                                                            </td>
+                                                            <td className="p-3 text-right">
+                                                                <button 
+                                                                    onClick={() => deleteUser(u.id)}
+                                                                    disabled={u.username === 'admin'}
+                                                                    className="text-red-500 hover:text-red-700 disabled:opacity-30 p-1"
+                                                                >
+                                                                    <Trash2 className="w-4 h-4" />
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </Card>
+                                </div>
+                            </div>
+                        )}
 
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                    <div className="glass-panel p-8 rounded-[2.5rem] border-t-2 border-orange-500">
-                                        <h3 className="text-xl font-black text-orange-400 mb-4 uppercase">Cargar Consumos</h3>
-                                        <p className="text-[10px] text-slate-500 mb-4 italic">Formatos: .csv, .xlsx</p>
-                                        <input type="file" accept=".csv, .xlsx, .xls" onChange={(e) => handleFileUpload(e, 'consumos')} className="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-orange-500/10 file:text-orange-500 cursor-pointer" />
+                        {/* VISTA: ALIMENTACIÓN */}
+                        {currentView === 'alimentacion' && (currentUser.role === ROLES.PROGRAMADOR || currentUser.role === ROLES.TECNICO) && (
+                            <div className="max-w-2xl mx-auto space-y-6">
+                                <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                                    <Activity className="text-green-600" /> Registro de Actividad
+                                </h2>
+
+                                <Card>
+                                    <form onSubmit={addLog} className="space-y-6">
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-700 mb-2">Seleccione Generador</label>
+                                            <select 
+                                                required
+                                                className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 bg-white"
+                                                value={entryForm.generatorId}
+                                                onChange={e => setEntryForm({...entryForm, generatorId: e.target.value})}
+                                            >
+                                                <option value="">-- Seleccionar Planta Eléctrica --</option>
+                                                {GENERADORES_DATA.map(gen => (
+                                                    <option key={gen.id} value={gen.id}>{gen.nombre}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-4 p-1 bg-slate-100 rounded-lg">
+                                            <button
+                                                type="button"
+                                                onClick={() => setEntryForm({...entryForm, type: 'gasoil'})}
+                                                className={`p-2 rounded-md font-medium flex items-center justify-center gap-2 transition-all ${entryForm.type === 'gasoil' ? 'bg-white shadow text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}
+                                            >
+                                                <Droplet className="w-4 h-4" /> Carga Gasoil
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setEntryForm({...entryForm, type: 'horas'})}
+                                                className={`p-2 rounded-md font-medium flex items-center justify-center gap-2 transition-all ${entryForm.type === 'horas' ? 'bg-white shadow text-amber-600' : 'text-slate-500 hover:text-slate-700'}`}
+                                            >
+                                                <Clock className="w-4 h-4" /> Horas Encendido
+                                            </button>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-700 mb-1">
+                                                    {entryForm.type === 'gasoil' ? 'Cantidad (Litros)' : 'Tiempo (Horas)'}
+                                                </label>
+                                                <input 
+                                                    type="number" 
+                                                    step="0.01"
+                                                    required
+                                                    min="0"
+                                                    className="w-full p-2 border border-slate-300 rounded-lg"
+                                                    value={entryForm.value}
+                                                    onChange={e => setEntryForm({...entryForm, value: e.target.value})}
+                                                    placeholder="0.00"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-700 mb-1">Fecha</label>
+                                                <input 
+                                                    type="date" 
+                                                    required
+                                                    className="w-full p-2 border border-slate-300 rounded-lg"
+                                                    value={entryForm.date}
+                                                    onChange={e => setEntryForm({...entryForm, date: e.target.value})}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <Button className="w-full py-3 justify-center text-lg" variant={entryForm.type === 'gasoil' ? 'primary' : 'secondary'}>
+                                            <Save className="w-5 h-5" /> 
+                                            Guardar Registro de {entryForm.type === 'gasoil' ? 'Gasoil' : 'Horas'}
+                                        </Button>
+                                    </form>
+                                </Card>
+                            </div>
+                        )}
+
+                        {/* VISTA: VISUALIZACIÓN */}
+                        {currentView === 'visualizacion' && (currentUser.role === ROLES.PROGRAMADOR || currentUser.role === ROLES.MONITOREO) && (
+                            <div className="space-y-6">
+                                <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                                    <BarChart3 className="text-purple-600" /> Tablero de Control
+                                </h2>
+
+                                <Card className="bg-white border-l-4 border-purple-500">
+                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                                        <div className="md:col-span-2">
+                                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Generador</label>
+                                            <select 
+                                                className="w-full p-2 border rounded-lg bg-slate-50 text-slate-800"
+                                                value={filterForm.generatorId}
+                                                onChange={e => setFilterForm({...filterForm, generatorId: e.target.value})}
+                                            >
+                                                <option value="all">-- Todos los Generadores (Total Global) --</option>
+                                                {GENERADORES_DATA.map(gen => (
+                                                    <option key={gen.id} value={gen.id}>{gen.nombre}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Desde</label>
+                                            <input 
+                                                type="date"
+                                                className="w-full p-2 border rounded-lg"
+                                                value={filterForm.startDate}
+                                                onChange={e => setFilterForm({...filterForm, startDate: e.target.value})}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Hasta</label>
+                                            <input 
+                                                type="date"
+                                                className="w-full p-2 border rounded-lg"
+                                                value={filterForm.endDate}
+                                                onChange={e => setFilterForm({...filterForm, endDate: e.target.value})}
+                                            />
+                                        </div>
                                     </div>
-                                    <div className="glass-panel p-8 rounded-[2.5rem] border-t-2 border-purple-500">
-                                        <h3 className="text-xl font-black text-purple-400 mb-4 uppercase">Cargar Surtidos</h3>
-                                        <p className="text-[10px] text-slate-500 mb-4 italic">Formatos: .csv, .xlsx</p>
-                                        <input type="file" accept=".csv, .xlsx, .xls" onChange={(e) => handleFileUpload(e, 'surtidos')} className="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-purple-500/10 file:text-purple-500 cursor-pointer" />
+                                </Card>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-6 text-white">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <div>
+                                                <p className="text-blue-100 font-medium">Total Gasoil Surtido</p>
+                                                <h3 className="text-3xl font-bold">{stats.gasoil.toLocaleString()} <span className="text-lg font-normal">Litros</span></h3>
+                                            </div>
+                                            <div className="bg-white/20 p-3 rounded-lg">
+                                                <Droplet className="w-8 h-8 text-white" />
+                                            </div>
+                                        </div>
+                                        <div className="text-sm text-blue-100 opacity-80">
+                                            {filterForm.generatorId === 'all' ? 'Suma de todos los generadores' : 'Total para generador seleccionado'}
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl shadow-lg p-6 text-white">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <div>
+                                                <p className="text-amber-100 font-medium">Total Horas Encendidas</p>
+                                                <h3 className="text-3xl font-bold">{stats.hours.toLocaleString()} <span className="text-lg font-normal">Hrs</span></h3>
+                                            </div>
+                                            <div className="bg-white/20 p-3 rounded-lg">
+                                                <Clock className="w-8 h-8 text-white" />
+                                            </div>
+                                        </div>
+                                        <div className="text-sm text-amber-100 opacity-80">
+                                            {filterForm.generatorId === 'all' ? 'Suma de todos los generadores' : 'Total para generador seleccionado'}
+                                        </div>
                                     </div>
                                 </div>
+
+                                <Card>
+                                    <h3 className="font-semibold text-lg mb-4 text-slate-700">Historial Detallado</h3>
+                                    {filteredLogs.length === 0 ? (
+                                        <div className="text-center py-10 text-slate-400">
+                                            No hay registros para los filtros seleccionados.
+                                        </div>
+                                    ) : (
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-left border-collapse">
+                                                <thead className="bg-slate-50 border-b-2 border-slate-100">
+                                                    <tr>
+                                                        <th className="p-3 text-sm font-bold text-slate-600">Fecha</th>
+                                                        <th className="p-3 text-sm font-bold text-slate-600">Generador</th>
+                                                        <th className="p-3 text-sm font-bold text-slate-600">Tipo</th>
+                                                        <th className="p-3 text-sm font-bold text-slate-600 text-right">Valor</th>
+                                                        <th className="p-3 text-sm font-bold text-slate-600 text-right">Registrado Por</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-100">
+                                                    {filteredLogs.map(log => (
+                                                        <tr key={log.id} className="hover:bg-slate-50 transition-colors">
+                                                            <td className="p-3 text-sm text-slate-600">{log.date}</td>
+                                                            <td className="p-3 text-sm font-medium text-slate-800">
+                                                                {GENERADORES_DATA.find(g => g.id === log.generatorId)?.nombre}
+                                                            </td>
+                                                            <td className="p-3 text-sm">
+                                                                <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${log.type === 'gasoil' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                                    {log.type === 'gasoil' ? <Droplet className="w-3 h-3"/> : <Clock className="w-3 h-3"/>}
+                                                                    {log.type === 'gasoil' ? 'Gasoil' : 'Horas'}
+                                                                </span>
+                                                            </td>
+                                                            <td className="p-3 text-sm text-right font-mono font-medium">
+                                                                {log.value} {log.type === 'gasoil' ? 'L' : 'h'}
+                                                            </td>
+                                                            <td className="p-3 text-sm text-right text-slate-500">
+                                                                {log.userName}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </Card>
                             </div>
                         )}
                     </main>
                 </div>
             );
-        };
+        }
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
