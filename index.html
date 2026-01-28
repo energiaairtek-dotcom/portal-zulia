@@ -3,19 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestión de Plantas Eléctricas</title>
+    <title>Gestión de Plantas Eléctricas - Historial</title>
     
-    <!-- Cargar React y ReactDOM -->
+    <!-- React y ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     
-    <!-- Cargar Babel para procesar JSX -->
+    <!-- Babel para JSX -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
-    <!-- Cargar Tailwind CSS -->
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
 
-    <!-- Estilos base para la fuente -->
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
         body { font-family: 'Inter', sans-serif; }
@@ -27,7 +26,7 @@
     <script type="text/babel">
         const { useState, useMemo, useEffect } = React;
 
-        // --- ICONOS (SVG Inline para evitar dependencias externas complejas) ---
+        // --- ICONOS SVG ---
         const Icon = ({ path, className }) => (
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
                 {path}
@@ -43,11 +42,8 @@
         const Menu = (props) => <Icon {...props} path={<><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></>} />;
         const ChevronDown = (props) => <Icon {...props} path={<><polyline points="6 9 12 15 18 9"></polyline></>} />;
         const Trash2 = (props) => <Icon {...props} path={<><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></>} />;
-        const PlusCircle = (props) => <Icon {...props} path={<><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></>} />;
-        const Save = (props) => <Icon {...props} path={<><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></>} />;
+        const HistoryIcon = (props) => <Icon {...props} path={<><path d="M3 3v5h5"></path><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"></path><polyline points="12 7 12 12 15 15"></polyline></>} />;
         const BarChart3 = (props) => <Icon {...props} path={<><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></>} />;
-
-        // --- DATOS Y CONFIGURACIÓN ---
 
         const GENERADORES_DATA = [
             { id: 1, nombre: "Comedor GE#00 (150kVA)" },
@@ -84,48 +80,40 @@
             TECNICO: 'Técnico',         
         };
 
-        // --- COMPONENTES UI ---
-
         const Card = ({ children, className = "" }) => (
             <div className={`bg-white rounded-xl shadow-md p-6 ${className}`}>
                 {children}
             </div>
         );
 
-        const Button = ({ onClick, children, variant = 'primary', className = "", disabled = false }) => {
+        const Button = ({ onClick, children, variant = 'primary', className = "", disabled = false, type = "button" }) => {
             const baseStyle = "px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed";
             const variants = {
                 primary: "bg-blue-600 text-white hover:bg-blue-700",
                 secondary: "bg-gray-100 text-gray-700 hover:bg-gray-200",
-                danger: "bg-red-100 text-red-600 hover:bg-red-200",
+                danger: "bg-red-500 text-white hover:bg-red-600",
                 outline: "border border-gray-300 text-gray-700 hover:bg-gray-50"
             };
             return (
-                <button onClick={onClick} className={`${baseStyle} ${variants[variant]} ${className}`} disabled={disabled}>
+                <button type={type} onClick={onClick} className={`${baseStyle} ${variants[variant]} ${className}`} disabled={disabled}>
                     {children}
                 </button>
             );
         };
 
-        // --- APLICACIÓN ---
-
         function App() {
-            // Estado
             const [users, setUsers] = useState([
                 { username: 'admin', password: 'admin', role: ROLES.PROGRAMADOR, id: 1 }
             ]);
-            
             const [currentUser, setCurrentUser] = useState(null);
             const [logs, setLogs] = useState([]);
             const [currentView, setCurrentView] = useState('login');
             
-            // Formularios
             const [loginForm, setLoginForm] = useState({ username: '', password: '' });
             const [userForm, setUserForm] = useState({ username: '', password: '', role: ROLES.TECNICO });
             const [entryForm, setEntryForm] = useState({ generatorId: '', type: 'gasoil', value: '', date: new Date().toISOString().split('T')[0] });
             const [filterForm, setFilterForm] = useState({ generatorId: 'all', startDate: '', endDate: '' });
 
-            // Handlers
             const handleLogin = (e) => {
                 e.preventDefault();
                 const user = users.find(u => u.username === loginForm.username && u.password === loginForm.password);
@@ -145,33 +133,12 @@
                 setCurrentView('login');
             };
 
-            const addUser = (e) => {
-                e.preventDefault();
-                if (users.some(u => u.username === userForm.username)) {
-                    alert("El nombre de usuario ya existe.");
-                    return;
-                }
-                const newUser = { ...userForm, id: Date.now() };
-                setUsers([...users, newUser]);
-                setUserForm({ username: '', password: '', role: ROLES.TECNICO });
-                alert("Usuario creado exitosamente.");
-            };
-
-            const deleteUser = (id) => {
-                if (id === 1) {
-                    alert("No se puede eliminar el usuario admin principal.");
-                    return;
-                }
-                setUsers(users.filter(u => u.id !== id));
-            };
-
             const addLog = (e) => {
                 e.preventDefault();
                 if (!entryForm.generatorId || !entryForm.value) {
-                    alert("Por favor complete todos los campos.");
+                    alert("Complete todos los campos.");
                     return;
                 }
-
                 const newLog = {
                     id: Date.now(),
                     generatorId: parseInt(entryForm.generatorId),
@@ -181,13 +148,17 @@
                     userId: currentUser.id,
                     userName: currentUser.username
                 };
-
                 setLogs([...logs, newLog]);
                 setEntryForm({ ...entryForm, value: '' }); 
-                alert("Registro guardado correctamente.");
+                alert("Registro guardado.");
             };
 
-            // Cálculos
+            const deleteLog = (id) => {
+                if (confirm("¿Está seguro de eliminar este registro del historial?")) {
+                    setLogs(logs.filter(log => log.id !== id));
+                }
+            };
+
             const filteredLogs = useMemo(() => {
                 return logs.filter(log => {
                     const matchGen = filterForm.generatorId === 'all' || log.generatorId === parseInt(filterForm.generatorId);
@@ -205,42 +176,27 @@
                 }, { gasoil: 0, hours: 0 });
             }, [filteredLogs]);
 
-            // Renderizado: Login
             if (!currentUser) {
                 return (
                     <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
                         <div className="max-w-md w-full">
                             <div className="text-center mb-8">
-                                <div className="bg-blue-600 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-500/30">
+                                <div className="bg-blue-600 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
                                     <Zap className="text-white w-8 h-8" />
                                 </div>
-                                <h1 className="text-2xl font-bold text-slate-800">Control de Generadores</h1>
-                                <p className="text-slate-500">Sistema de Gestión de Energía</p>
+                                <h1 className="text-2xl font-bold text-slate-800">Control Energético</h1>
                             </div>
-                            
                             <Card>
                                 <form onSubmit={handleLogin} className="space-y-4">
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">Usuario</label>
-                                        <input 
-                                            type="text" 
-                                            required
-                                            className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                                            value={loginForm.username}
-                                            onChange={e => setLoginForm({...loginForm, username: e.target.value})}
-                                        />
+                                        <label className="block text-sm font-medium mb-1">Usuario</label>
+                                        <input type="text" required className="w-full p-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500" value={loginForm.username} onChange={e => setLoginForm({...loginForm, username: e.target.value})} />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">Contraseña</label>
-                                        <input 
-                                            type="password" 
-                                            required
-                                            className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                                            value={loginForm.password}
-                                            onChange={e => setLoginForm({...loginForm, password: e.target.value})}
-                                        />
+                                        <label className="block text-sm font-medium mb-1">Contraseña</label>
+                                        <input type="password" required className="w-full p-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500" value={loginForm.password} onChange={e => setLoginForm({...loginForm, password: e.target.value})} />
                                     </div>
-                                    <Button className="w-full justify-center">Ingresar</Button>
+                                    <Button type="submit" className="w-full">Entrar</Button>
                                 </form>
                             </Card>
                         </div>
@@ -248,359 +204,195 @@
                 );
             }
 
-            // Renderizado: App Principal
             return (
                 <div className="min-h-screen bg-slate-50">
                     <nav className="bg-slate-900 text-white shadow-lg sticky top-0 z-50">
-                        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                            <div className="flex items-center justify-between h-16">
-                                <div className="flex items-center gap-3">
-                                    <div className="bg-blue-500 p-1.5 rounded-lg">
-                                        <Zap className="w-5 h-5" />
-                                    </div>
-                                    <span className="font-bold text-lg hidden sm:block">PowerMonitor</span>
-                                </div>
-
-                                <div className="flex items-center gap-4">
-                                    <div className="relative group">
-                                        <button className="flex items-center gap-2 bg-slate-800 px-4 py-2 rounded-lg hover:bg-slate-700 transition-colors">
-                                            <Menu className="w-4 h-4" />
-                                            <span>Módulos</span>
-                                            <ChevronDown className="w-4 h-4" />
-                                        </button>
-                                        
-                                        <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-xl py-1 text-slate-800 hidden group-hover:block border border-slate-100">
-                                            {currentUser.role === ROLES.PROGRAMADOR && (
-                                                <button 
-                                                    onClick={() => setCurrentView('usuarios')}
-                                                    className="w-full text-left px-4 py-2 hover:bg-blue-50 flex items-center gap-2"
-                                                >
-                                                    <Users className="w-4 h-4 text-blue-600" /> Usuarios
-                                                </button>
-                                            )}
-                                            
-                                            {(currentUser.role === ROLES.PROGRAMADOR || currentUser.role === ROLES.TECNICO) && (
-                                                <button 
-                                                    onClick={() => setCurrentView('alimentacion')}
-                                                    className="w-full text-left px-4 py-2 hover:bg-blue-50 flex items-center gap-2"
-                                                >
-                                                    <Activity className="w-4 h-4 text-green-600" /> Alimentación
-                                                </button>
-                                            )}
-                                            
-                                            {(currentUser.role === ROLES.PROGRAMADOR || currentUser.role === ROLES.MONITOREO) && (
-                                                <button 
-                                                    onClick={() => setCurrentView('visualizacion')}
-                                                    className="w-full text-left px-4 py-2 hover:bg-blue-50 flex items-center gap-2"
-                                                >
-                                                    <BarChart3 className="w-4 h-4 text-purple-600" /> Visualización
-                                                </button>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    <div className="h-6 w-px bg-slate-700 mx-2"></div>
-                                    
-                                    <div className="flex items-center gap-3">
-                                        <div className="text-right hidden sm:block">
-                                            <p className="text-sm font-medium">{currentUser.username}</p>
-                                            <p className="text-xs text-slate-400">{currentUser.role}</p>
-                                        </div>
-                                        <button onClick={handleLogout} className="p-2 hover:bg-slate-800 rounded-full text-red-400 hover:text-red-300 transition-colors">
-                                            <LogOut className="w-5 h-5" />
-                                        </button>
+                        <div className="max-w-7xl mx-auto px-4 flex items-center justify-between h-16">
+                            <div className="flex items-center gap-3">
+                                <Zap className="w-6 h-6 text-blue-400" />
+                                <span className="font-bold text-lg">PowerMonitor</span>
+                            </div>
+                            <div className="flex items-center gap-2 sm:gap-4">
+                                <div className="relative group">
+                                    <button className="flex items-center gap-2 bg-slate-800 px-3 py-1.5 rounded-lg hover:bg-slate-700">
+                                        <Menu className="w-4 h-4" />
+                                        <span className="hidden sm:inline">Modulos</span>
+                                    </button>
+                                    <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-xl py-1 text-slate-800 hidden group-hover:block border border-slate-100">
+                                        {currentUser.role === ROLES.PROGRAMADOR && (
+                                            <button onClick={() => setCurrentView('usuarios')} className="w-full text-left px-4 py-2 hover:bg-blue-50 flex items-center gap-2">
+                                                <Users className="w-4 h-4 text-blue-600" /> Usuarios
+                                            </button>
+                                        )}
+                                        {currentUser.role === ROLES.PROGRAMADOR && (
+                                            <button onClick={() => setCurrentView('historial')} className="w-full text-left px-4 py-2 hover:bg-blue-50 flex items-center gap-2 font-semibold">
+                                                <HistoryIcon className="w-4 h-4 text-orange-600" /> Historial Maestro
+                                            </button>
+                                        )}
+                                        {(currentUser.role === ROLES.PROGRAMADOR || currentUser.role === ROLES.TECNICO) && (
+                                            <button onClick={() => setCurrentView('alimentacion')} className="w-full text-left px-4 py-2 hover:bg-blue-50 flex items-center gap-2">
+                                                <Activity className="w-4 h-4 text-green-600" /> Alimentación
+                                            </button>
+                                        )}
+                                        {(currentUser.role === ROLES.PROGRAMADOR || currentUser.role === ROLES.MONITOREO) && (
+                                            <button onClick={() => setCurrentView('visualizacion')} className="w-full text-left px-4 py-2 hover:bg-blue-50 flex items-center gap-2">
+                                                <BarChart3 className="w-4 h-4 text-purple-600" /> Tablero
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
+                                <div className="text-right hidden sm:block">
+                                    <p className="text-xs text-slate-400">{currentUser.role}</p>
+                                    <p className="text-sm font-medium">{currentUser.username}</p>
+                                </div>
+                                <button onClick={handleLogout} className="p-2 text-red-400 hover:bg-slate-800 rounded-full"><LogOut className="w-5 h-5"/></button>
                             </div>
                         </div>
                     </nav>
-                    
-                    <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                        {/* VISTA: USUARIOS */}
-                        {currentView === 'usuarios' && currentUser.role === ROLES.PROGRAMADOR && (
-                            <div className="space-y-6">
-                                <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-                                    <Users className="text-blue-600" /> Gestión de Usuarios
-                                </h2>
-                                
-                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                                    <Card className="lg:col-span-1 h-fit">
-                                        <h3 className="font-semibold text-lg mb-4">Nuevo Usuario</h3>
-                                        <form onSubmit={addUser} className="space-y-4">
-                                            <div>
-                                                <label className="text-sm font-medium text-slate-700">Usuario</label>
-                                                <input 
-                                                    type="text" required
-                                                    className="w-full p-2 border rounded mt-1"
-                                                    value={userForm.username}
-                                                    onChange={e => setUserForm({...userForm, username: e.target.value})}
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="text-sm font-medium text-slate-700">Contraseña</label>
-                                                <input 
-                                                    type="password" required
-                                                    className="w-full p-2 border rounded mt-1"
-                                                    value={userForm.password}
-                                                    onChange={e => setUserForm({...userForm, password: e.target.value})}
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="text-sm font-medium text-slate-700">Nivel de Acceso</label>
-                                                <select 
-                                                    className="w-full p-2 border rounded mt-1 bg-white"
-                                                    value={userForm.role}
-                                                    onChange={e => setUserForm({...userForm, role: e.target.value})}
-                                                >
-                                                    <option value={ROLES.PROGRAMADOR}>Programador (Total)</option>
-                                                    <option value={ROLES.MONITOREO}>Monitoreo (Solo ver)</option>
-                                                    <option value={ROLES.TECNICO}>Técnico (Solo carga)</option>
-                                                </select>
-                                            </div>
-                                            <Button className="w-full justify-center">
-                                                <PlusCircle className="w-4 h-4" /> Agregar Usuario
-                                            </Button>
-                                        </form>
-                                    </Card>
 
-                                    <Card className="lg:col-span-2">
-                                        <h3 className="font-semibold text-lg mb-4">Lista de Usuarios</h3>
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full text-left">
-                                                <thead className="bg-slate-50 border-b">
-                                                    <tr>
-                                                        <th className="p-3 text-sm font-semibold text-slate-600">Usuario</th>
-                                                        <th className="p-3 text-sm font-semibold text-slate-600">Nivel</th>
-                                                        <th className="p-3 text-sm font-semibold text-slate-600 text-right">Acciones</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y">
-                                                    {users.map(u => (
-                                                        <tr key={u.id}>
-                                                            <td className="p-3 text-slate-800 font-medium">{u.username}</td>
-                                                            <td className="p-3">
-                                                                <span className={`px-2 py-1 rounded-full text-xs font-medium 
-                                                                    ${u.role === ROLES.PROGRAMADOR ? 'bg-purple-100 text-purple-700' : 
-                                                                    u.role === ROLES.MONITOREO ? 'bg-blue-100 text-blue-700' : 
-                                                                    'bg-green-100 text-green-700'}`}>
-                                                                    {u.role}
+                    <main className="max-w-7xl mx-auto px-4 py-8">
+                        {/* VISTA: HISTORIAL MAESTRO (SOLO PROGRAMADOR) */}
+                        {currentView === 'historial' && currentUser.role === ROLES.PROGRAMADOR && (
+                            <div className="space-y-6">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                    <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                                        <HistoryIcon className="text-orange-600" /> Historial de Auditoría
+                                    </h2>
+                                    <div className="bg-orange-50 text-orange-700 px-4 py-2 rounded-lg text-sm border border-orange-200">
+                                        Total registros: <strong>{logs.length}</strong>
+                                    </div>
+                                </div>
+
+                                <Card>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left">
+                                            <thead className="bg-slate-50 border-b">
+                                                <tr>
+                                                    <th className="p-4 text-sm font-bold text-slate-600">Fecha</th>
+                                                    <th className="p-4 text-sm font-bold text-slate-600">Generador</th>
+                                                    <th className="p-4 text-sm font-bold text-slate-600">Tipo</th>
+                                                    <th className="p-4 text-sm font-bold text-slate-600">Valor</th>
+                                                    <th className="p-4 text-sm font-bold text-slate-600">Usuario</th>
+                                                    <th className="p-4 text-sm font-bold text-slate-600 text-center">Acciones</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y">
+                                                {logs.length === 0 ? (
+                                                    <tr><td colSpan="6" className="p-10 text-center text-slate-400">No hay registros en el sistema.</td></tr>
+                                                ) : (
+                                                    [...logs].sort((a,b) => b.id - a.id).map(log => (
+                                                        <tr key={log.id} className="hover:bg-slate-50">
+                                                            <td className="p-4 text-sm">{log.date}</td>
+                                                            <td className="p-4 text-sm font-medium">
+                                                                {GENERADORES_DATA.find(g => g.id === log.generatorId)?.nombre || 'N/A'}
+                                                            </td>
+                                                            <td className="p-4">
+                                                                <span className={`px-2 py-1 rounded-full text-xs font-bold ${log.type === 'gasoil' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                                    {log.type.toUpperCase()}
                                                                 </span>
                                                             </td>
-                                                            <td className="p-3 text-right">
+                                                            <td className="p-4 font-mono font-bold">
+                                                                {log.value} {log.type === 'gasoil' ? 'L' : 'h'}
+                                                            </td>
+                                                            <td className="p-4 text-sm text-slate-500 italic">{log.userName}</td>
+                                                            <td className="p-4 text-center">
                                                                 <button 
-                                                                    onClick={() => deleteUser(u.id)}
-                                                                    disabled={u.username === 'admin'}
-                                                                    className="text-red-500 hover:text-red-700 disabled:opacity-30 p-1"
+                                                                    onClick={() => deleteLog(log.id)}
+                                                                    className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                                                    title="Eliminar Registro"
                                                                 >
-                                                                    <Trash2 className="w-4 h-4" />
+                                                                    <Trash2 className="w-5 h-5" />
                                                                 </button>
                                                             </td>
                                                         </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </Card>
-                                </div>
+                                                    ))
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </Card>
                             </div>
                         )}
 
                         {/* VISTA: ALIMENTACIÓN */}
-                        {currentView === 'alimentacion' && (currentUser.role === ROLES.PROGRAMADOR || currentUser.role === ROLES.TECNICO) && (
-                            <div className="max-w-2xl mx-auto space-y-6">
-                                <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-                                    <Activity className="text-green-600" /> Registro de Actividad
-                                </h2>
-
+                        {currentView === 'alimentacion' && (
+                            <div className="max-w-xl mx-auto space-y-6">
+                                <h2 className="text-2xl font-bold flex items-center gap-2"><Activity className="text-green-600"/> Nuevo Registro</h2>
                                 <Card>
-                                    <form onSubmit={addLog} className="space-y-6">
-                                        <div>
-                                            <label className="block text-sm font-medium text-slate-700 mb-2">Seleccione Generador</label>
-                                            <select 
-                                                required
-                                                className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 bg-white"
-                                                value={entryForm.generatorId}
-                                                onChange={e => setEntryForm({...entryForm, generatorId: e.target.value})}
-                                            >
-                                                <option value="">-- Seleccionar Planta Eléctrica --</option>
-                                                {GENERADORES_DATA.map(gen => (
-                                                    <option key={gen.id} value={gen.id}>{gen.nombre}</option>
-                                                ))}
-                                            </select>
+                                    <form onSubmit={addLog} className="space-y-4">
+                                        <select required className="w-full p-3 border rounded-lg bg-white" value={entryForm.generatorId} onChange={e => setEntryForm({...entryForm, generatorId: e.target.value})}>
+                                            <option value="">Seleccionar Planta...</option>
+                                            {GENERADORES_DATA.map(g => <option key={g.id} value={g.id}>{g.nombre}</option>)}
+                                        </select>
+                                        <div className="flex bg-slate-100 p-1 rounded-lg">
+                                            <button type="button" onClick={() => setEntryForm({...entryForm, type: 'gasoil'})} className={`flex-1 py-2 rounded-md ${entryForm.type==='gasoil'?'bg-white shadow text-blue-600':'text-slate-500'}`}>Gasoil</button>
+                                            <button type="button" onClick={() => setEntryForm({...entryForm, type: 'horas'})} className={`flex-1 py-2 rounded-md ${entryForm.type==='horas'?'bg-white shadow text-amber-600':'text-slate-500'}`}>Horas</button>
                                         </div>
-
-                                        <div className="grid grid-cols-2 gap-4 p-1 bg-slate-100 rounded-lg">
-                                            <button
-                                                type="button"
-                                                onClick={() => setEntryForm({...entryForm, type: 'gasoil'})}
-                                                className={`p-2 rounded-md font-medium flex items-center justify-center gap-2 transition-all ${entryForm.type === 'gasoil' ? 'bg-white shadow text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}
-                                            >
-                                                <Droplet className="w-4 h-4" /> Carga Gasoil
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => setEntryForm({...entryForm, type: 'horas'})}
-                                                className={`p-2 rounded-md font-medium flex items-center justify-center gap-2 transition-all ${entryForm.type === 'horas' ? 'bg-white shadow text-amber-600' : 'text-slate-500 hover:text-slate-700'}`}
-                                            >
-                                                <Clock className="w-4 h-4" /> Horas Encendido
-                                            </button>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <input type="number" step="0.1" required className="p-2 border rounded-lg" placeholder="Cantidad" value={entryForm.value} onChange={e => setEntryForm({...entryForm, value: e.target.value})} />
+                                            <input type="date" required className="p-2 border rounded-lg" value={entryForm.date} onChange={e => setEntryForm({...entryForm, date: e.target.value})} />
                                         </div>
-
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="block text-sm font-medium text-slate-700 mb-1">
-                                                    {entryForm.type === 'gasoil' ? 'Cantidad (Litros)' : 'Tiempo (Horas)'}
-                                                </label>
-                                                <input 
-                                                    type="number" 
-                                                    step="0.01"
-                                                    required
-                                                    min="0"
-                                                    className="w-full p-2 border border-slate-300 rounded-lg"
-                                                    value={entryForm.value}
-                                                    onChange={e => setEntryForm({...entryForm, value: e.target.value})}
-                                                    placeholder="0.00"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-slate-700 mb-1">Fecha</label>
-                                                <input 
-                                                    type="date" 
-                                                    required
-                                                    className="w-full p-2 border border-slate-300 rounded-lg"
-                                                    value={entryForm.date}
-                                                    onChange={e => setEntryForm({...entryForm, date: e.target.value})}
-                                                />
-                                            </div>
-                                        </div>
-
-                                        <Button className="w-full py-3 justify-center text-lg" variant={entryForm.type === 'gasoil' ? 'primary' : 'secondary'}>
-                                            <Save className="w-5 h-5" /> 
-                                            Guardar Registro de {entryForm.type === 'gasoil' ? 'Gasoil' : 'Horas'}
-                                        </Button>
+                                        <Button type="submit" className="w-full py-3" variant={entryForm.type==='gasoil'?'primary':'secondary'}>Guardar Registro</Button>
                                     </form>
                                 </Card>
                             </div>
                         )}
 
-                        {/* VISTA: VISUALIZACIÓN */}
-                        {currentView === 'visualizacion' && (currentUser.role === ROLES.PROGRAMADOR || currentUser.role === ROLES.MONITOREO) && (
+                        {/* VISTA: TABLERO / VISUALIZACIÓN */}
+                        {currentView === 'visualizacion' && (
                             <div className="space-y-6">
-                                <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-                                    <BarChart3 className="text-purple-600" /> Tablero de Control
-                                </h2>
-
-                                <Card className="bg-white border-l-4 border-purple-500">
-                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                                        <div className="md:col-span-2">
-                                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Generador</label>
-                                            <select 
-                                                className="w-full p-2 border rounded-lg bg-slate-50 text-slate-800"
-                                                value={filterForm.generatorId}
-                                                onChange={e => setFilterForm({...filterForm, generatorId: e.target.value})}
-                                            >
-                                                <option value="all">-- Todos los Generadores (Total Global) --</option>
-                                                {GENERADORES_DATA.map(gen => (
-                                                    <option key={gen.id} value={gen.id}>{gen.nombre}</option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Desde</label>
-                                            <input 
-                                                type="date"
-                                                className="w-full p-2 border rounded-lg"
-                                                value={filterForm.startDate}
-                                                onChange={e => setFilterForm({...filterForm, startDate: e.target.value})}
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Hasta</label>
-                                            <input 
-                                                type="date"
-                                                className="w-full p-2 border rounded-lg"
-                                                value={filterForm.endDate}
-                                                onChange={e => setFilterForm({...filterForm, endDate: e.target.value})}
-                                            />
-                                        </div>
+                                <h2 className="text-2xl font-bold flex items-center gap-2"><BarChart3 className="text-purple-600"/> Tablero</h2>
+                                <Card className="bg-slate-100 border-none">
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <select className="p-2 border rounded-lg bg-white" value={filterForm.generatorId} onChange={e => setFilterForm({...filterForm, generatorId: e.target.value})}>
+                                            <option value="all">Todas las plantas</option>
+                                            {GENERADORES_DATA.map(g => <option key={g.id} value={g.id}>{g.nombre}</option>)}
+                                        </select>
+                                        <input type="date" className="p-2 border rounded-lg" value={filterForm.startDate} onChange={e => setFilterForm({...filterForm, startDate: e.target.value})} />
+                                        <input type="date" className="p-2 border rounded-lg" value={filterForm.endDate} onChange={e => setFilterForm({...filterForm, endDate: e.target.value})} />
                                     </div>
                                 </Card>
-
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-6 text-white">
-                                        <div className="flex items-center justify-between mb-4">
-                                            <div>
-                                                <p className="text-blue-100 font-medium">Total Gasoil Surtido</p>
-                                                <h3 className="text-3xl font-bold">{stats.gasoil.toLocaleString()} <span className="text-lg font-normal">Litros</span></h3>
-                                            </div>
-                                            <div className="bg-white/20 p-3 rounded-lg">
-                                                <Droplet className="w-8 h-8 text-white" />
-                                            </div>
-                                        </div>
-                                        <div className="text-sm text-blue-100 opacity-80">
-                                            {filterForm.generatorId === 'all' ? 'Suma de todos los generadores' : 'Total para generador seleccionado'}
-                                        </div>
-                                    </div>
-
-                                    <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl shadow-lg p-6 text-white">
-                                        <div className="flex items-center justify-between mb-4">
-                                            <div>
-                                                <p className="text-amber-100 font-medium">Total Horas Encendidas</p>
-                                                <h3 className="text-3xl font-bold">{stats.hours.toLocaleString()} <span className="text-lg font-normal">Hrs</span></h3>
-                                            </div>
-                                            <div className="bg-white/20 p-3 rounded-lg">
-                                                <Clock className="w-8 h-8 text-white" />
-                                            </div>
-                                        </div>
-                                        <div className="text-sm text-amber-100 opacity-80">
-                                            {filterForm.generatorId === 'all' ? 'Suma de todos los generadores' : 'Total para generador seleccionado'}
-                                        </div>
-                                    </div>
+                                    <Card className="bg-blue-600 text-white"><p className="text-blue-100">Suministro de Gasoil</p><p className="text-3xl font-bold">{stats.gasoil} L</p></Card>
+                                    <Card className="bg-amber-500 text-white"><p className="text-amber-100">Horas Acumuladas</p><p className="text-3xl font-bold">{stats.hours} h</p></Card>
                                 </div>
-
                                 <Card>
-                                    <h3 className="font-semibold text-lg mb-4 text-slate-700">Historial Detallado</h3>
-                                    {filteredLogs.length === 0 ? (
-                                        <div className="text-center py-10 text-slate-400">
-                                            No hay registros para los filtros seleccionados.
-                                        </div>
-                                    ) : (
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full text-left border-collapse">
-                                                <thead className="bg-slate-50 border-b-2 border-slate-100">
-                                                    <tr>
-                                                        <th className="p-3 text-sm font-bold text-slate-600">Fecha</th>
-                                                        <th className="p-3 text-sm font-bold text-slate-600">Generador</th>
-                                                        <th className="p-3 text-sm font-bold text-slate-600">Tipo</th>
-                                                        <th className="p-3 text-sm font-bold text-slate-600 text-right">Valor</th>
-                                                        <th className="p-3 text-sm font-bold text-slate-600 text-right">Registrado Por</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-slate-100">
-                                                    {filteredLogs.map(log => (
-                                                        <tr key={log.id} className="hover:bg-slate-50 transition-colors">
-                                                            <td className="p-3 text-sm text-slate-600">{log.date}</td>
-                                                            <td className="p-3 text-sm font-medium text-slate-800">
-                                                                {GENERADORES_DATA.find(g => g.id === log.generatorId)?.nombre}
-                                                            </td>
-                                                            <td className="p-3 text-sm">
-                                                                <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${log.type === 'gasoil' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
-                                                                    {log.type === 'gasoil' ? <Droplet className="w-3 h-3"/> : <Clock className="w-3 h-3"/>}
-                                                                    {log.type === 'gasoil' ? 'Gasoil' : 'Horas'}
-                                                                </span>
-                                                            </td>
-                                                            <td className="p-3 text-sm text-right font-mono font-medium">
-                                                                {log.value} {log.type === 'gasoil' ? 'L' : 'h'}
-                                                            </td>
-                                                            <td className="p-3 text-sm text-right text-slate-500">
-                                                                {log.userName}
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    )}
+                                    <table className="w-full text-left">
+                                        <thead><tr className="border-b"><th className="p-2">Fecha</th><th className="p-2">Planta</th><th className="p-2">Valor</th></tr></thead>
+                                        <tbody>
+                                            {filteredLogs.map(l => (
+                                                <tr key={l.id} className="border-b hover:bg-slate-50">
+                                                    <td className="p-2 text-sm">{l.date}</td>
+                                                    <td className="p-2 text-sm font-medium">{GENERADORES_DATA.find(g => g.id === l.generatorId)?.nombre}</td>
+                                                    <td className={`p-2 font-bold ${l.type==='gasoil'?'text-blue-600':'text-amber-600'}`}>{l.value}{l.type==='gasoil'?'L':'h'}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </Card>
+                            </div>
+                        )}
+                        
+                        {/* VISTA USUARIOS */}
+                        {currentView === 'usuarios' && currentUser.role === ROLES.PROGRAMADOR && (
+                            <div className="space-y-6">
+                                <h2 className="text-2xl font-bold flex items-center gap-2"><Users className="text-blue-600"/> Gestión Usuarios</h2>
+                                <Card className="max-w-md">
+                                    <form onSubmit={(e) => {
+                                        e.preventDefault();
+                                        setUsers([...users, {...userForm, id: Date.now()}]);
+                                        setUserForm({username: '', password: '', role: ROLES.TECNICO});
+                                        alert("Usuario Creado");
+                                    }} className="space-y-4">
+                                        <input placeholder="Username" required className="w-full p-2 border rounded" value={userForm.username} onChange={e => setUserForm({...userForm, username: e.target.value})} />
+                                        <input placeholder="Password" required type="password" className="w-full p-2 border rounded" value={userForm.password} onChange={e => setUserForm({...userForm, password: e.target.value})} />
+                                        <select className="w-full p-2 border rounded" value={userForm.role} onChange={e => setUserForm({...userForm, role: e.target.value})}>
+                                            <option value={ROLES.TECNICO}>Técnico</option>
+                                            <option value={ROLES.MONITOREO}>Monitoreo</option>
+                                            <option value={ROLES.PROGRAMADOR}>Programador</option>
+                                        </select>
+                                        <Button type="submit" className="w-full">Crear Usuario</Button>
+                                    </form>
                                 </Card>
                             </div>
                         )}
