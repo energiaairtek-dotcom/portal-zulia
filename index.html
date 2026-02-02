@@ -567,5 +567,23 @@
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
     </script>
+    // Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyDwaK4Z26RfqDwNvwdMqri08oEjwG9qymc",
+  authDomain: "almacen-airtek.firebaseapp.com",
+  projectId: "almacen-airtek",
+  storageBucket: "almacen-airtek.firebasestorage.app",
+  messagingSenderId: "934058211778",
+  appId: "1:934058211778:web:acbbec880576b6cea5fe5b"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
 </body>
 </html>
+
